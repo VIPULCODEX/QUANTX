@@ -35,8 +35,7 @@ st.set_page_config(
 #  THEMES CONFIGURATION
 # ════════════════════════════════════════════════════════════════
 THEMES = {
-    "Matrix (Green)": { "P": "#00ff41", "S": "#00cc33", "UBG": "#00140a", "BBG": "#000d05", "T": "#b3ffcc", "A": "#ff4d00", "AT": "#ffb380", "CBG": "#030f03", "BG": "#000000" },
-    "Batman (Black/Yellow)": { "P": "#ffcc00", "S": "#808080", "UBG": "#1a1a1a", "BBG": "#050505", "T": "#ffffff", "A": "#ff1a1a", "AT": "#ff9999", "CBG": "#0a0a0a", "BG": "#000000" }
+    "Matrix (Green)": { "P": "#00ff41", "S": "#00cc33", "UBG": "#00140a", "BBG": "#000d05", "T": "#b3ffcc", "A": "#ff4d00", "AT": "#ffb380", "CBG": "#030f03", "BG": "#000000" }
 }
 
 if "theme" not in st.session_state:
@@ -462,7 +461,7 @@ if "news_count" not in st.session_state:
 if "top_k" not in st.session_state:
     st.session_state.top_k = TOP_K
 if "show_animation" not in st.session_state:
-    st.session_state.show_animation = None
+    st.session_state.show_animation = "Matrix (Green)"
 
 # ════════════════════════════════════════════════════════════════
 #  THEME ANIMATION INJECTION
@@ -481,8 +480,6 @@ if st.session_state.show_animation:
         }});
         window.parent.document.body.appendChild(overlay);
 
-        const theme = "{theme_name}";
-        
         function createParticle(content, cssProps, keyframes, duration) {{
             const p = window.parent.document.createElement("div");
             p.innerHTML = content;
@@ -491,57 +488,40 @@ if st.session_state.show_animation:
             p.animate(keyframes, {{ duration: duration, easing: 'ease-out', fill: 'forwards' }});
         }}
 
-        if (theme === 'Matrix (Green)') {{
-            const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノABCDEF';
-            const numColumns = 50;
-            for(let i=0; i<numColumns; i++) {{
-                let colStr = '';
-                const length = 30 + Math.floor(Math.random() * 30); // Longer strings so they don't look cut off
-                for(let j=0; j<length; j++) {{
-                    colStr += chars[Math.floor(Math.random() * chars.length)] + '<br>';
-                }}
-                
-                // Alternate between falling down and floating up
-                const isFalling = (i % 2 === 0);
-                // clear way above and below to prevent "halfway" stop
-                const startY = isFalling ? '-100vh' : '110vh';
-                const endY = isFalling ? '200vh' : '-200vh'; 
-                
-                createParticle(colStr, {{ 
-                    left: (i * (100 / numColumns)) + '%', 
-                    top: startY, 
-                    color: '#00ff41', 
-                    fontFamily: '"Share Tech Mono", monospace', 
-                    fontSize: '1.2rem', 
-                    lineHeight: '1.0',
-                    textAlign: 'center',
-                    textShadow: '0 0 5px #00ff41, 0 0 10px #00cc33',
-                    opacity: 0.6 + Math.random()*0.4
-                }}, [
-                    {{ transform: 'translateY(0)' }},
-                    {{ transform: `translateY(${{endY}})` }}
-                ], 5000); // Animate scrolling for 5 seconds
+        // Only Matrix animation remains
+        const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノABCDEF';
+        const numColumns = 50;
+        for(let i=0; i<numColumns; i++) {{
+            let colStr = '';
+            const length = 30 + Math.floor(Math.random() * 30);
+            for(let j=0; j<length; j++) {{
+                colStr += chars[Math.floor(Math.random() * chars.length)] + '<br>';
             }}
-        }} else if (theme === 'Batman (Black/Yellow)') {{
-            for(let i=0; i<80; i++) {{
-                createParticle('🦇', {{ 
-                    left: (Math.random() * 120 - 10) + '%', 
-                    top: '110vh',
-                    fontFamily: '"Noto Color Emoji", sans-serif',
-                    fontSize: (1.5 + Math.random() * 3.5) + 'rem',
-                    filter: 'drop-shadow(0px 0px 8px rgba(255, 204, 0, 0.6))',
-                    opacity: 0.7 + Math.random()*0.3
-                }}, [
-                    {{ transform: `translate(0, 0) scale(0.5) rotate(${{(Math.random()-0.5)*40}}deg)` }},
-                    {{ transform: `translate(${{(Math.random()-0.5)*60}}vw, -130vh) scale(${{1 + Math.random()*1.5}}) rotate(${{(Math.random()-0.5)*80}}deg)` }}
-                ], 1500 + Math.random()*3500);
-            }}
+            
+            const isFalling = (i % 2 === 0);
+            const startY = isFalling ? '-100vh' : '110vh';
+            const endY = isFalling ? '200vh' : '-200vh'; 
+            
+            createParticle(colStr, {{ 
+                left: (i * (100 / numColumns)) + '%', 
+                top: startY, 
+                color: '#00ff41', 
+                fontFamily: '"Share Tech Mono", monospace', 
+                fontSize: '1.2rem', 
+                lineHeight: '1.0',
+                textAlign: 'center',
+                textShadow: '0 0 5px #00ff41, 0 0 10px #00cc33',
+                opacity: 0.6 + Math.random()*0.4
+            }}, [
+                {{ transform: 'translateY(0)' }},
+                {{ transform: `translateY(${{endY}})` }}
+            ], 5000);
         }}
 
         setTimeout(() => {{
             overlay.style.opacity = '0';
             setTimeout(() => overlay.remove(), 1000);
-        }}, 5000); // 5s full visibility + 1s fade out
+        }}, 5000);
     </script>
     """
     components.html(js_code, height=0, width=0)
@@ -701,26 +681,12 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════
 #  HEADER
 # ════════════════════════════════════════════════════════════════
-col1, col2 = st.columns([8, 2])
-with col1:
-    st.markdown("""
-    <div class="cyber-header">
-        <h1>🛡 CYBERFRIEND AI</h1>
-        <p>// REAL-TIME THREAT INTELLIGENCE & CYBERSECURITY ADVISOR //</p>
-    </div>
-    """, unsafe_allow_html=True)
-with col2:
-    st.markdown('<div style="height: 1.5rem;"></div>', unsafe_allow_html=True)
-    selected_theme = st.selectbox(
-        "Theme",
-        list(THEMES.keys()),
-        index=list(THEMES.keys()).index(st.session_state.theme),
-        label_visibility="collapsed"
-    )
-    if selected_theme != st.session_state.theme:
-        st.session_state.theme = selected_theme
-        st.session_state.show_animation = selected_theme
-        st.rerun()
+st.markdown("""
+<div class="cyber-header">
+    <h1>🛡 CYBERFRIEND AI</h1>
+    <p>// REAL-TIME THREAT INTELLIGENCE & CYBERSECURITY ADVISOR //</p>
+</div>
+""", unsafe_allow_html=True)
 st.markdown('<div class="term-divider">━━━━━━━━━━━━━━━━━━ SECURE CHANNEL ESTABLISHED ━━━━━━━━━━━━━━━━━━</div>', unsafe_allow_html=True)
 
 
