@@ -830,30 +830,5 @@ with tab2:
                 analysis_result = st.session_state.assistant.analyze_system(os_val, browser_val, av_val, activity_val)
                 st.markdown(f'<div class="msg-bot" style="border-left-color:#ff4d00;">{analysis_result}</div>', unsafe_allow_html=True)
 
-with tab3:
-    st.markdown('<div class="sidebar-title">// ARCHITECTURE & SPECIFICATIONS</div>', unsafe_allow_html=True)
-    st.markdown("""
-    ```mermaid
-    graph TD;
-        User((Operator)) -->|Input Query| UI[Streamlit UI Interface]
-        UI --> Router{Query Router Engine}
-        Router -->|News Request| API[Live News API]
-        Router -->|Knowledge Query| RAG[FAISS Local Vector DB]
-        Router -->|System Scan| OS[System Analysis Engine]
-        API --> LLM[(Groq LLaMA Cloud Core)]
-        RAG -->|Contextual Data Object| LLM
-        OS --> LLM
-        LLM -->|Cyber Intelligence Payload| UI
-    ```
-    """)
-    st.markdown("""
-    <div class="msg-bot" style="border-left-color:#00ff41; margin-top:20px;">
-    <b>⚙️ Technical Specifications:</b><br><br>
-    • <b>Frontend Core:</b> Streamlit running isolated custom Python logic with real-time DOM injection (Canvas Overlays).<br>
-    • <b>LLM Inference Engine:</b> Hosted Groq Cloud architecture executing LLaMA models at rapid speeds, completely minimizing local CPU payload.<br>
-    • <b>Vector Retrieval System:</b> FAISS (Facebook AI Similarity Search) utilizing local CPU memory for rapid access while indexing knowledge arrays.<br>
-    • <b>Embedding Model:</b> <code>sentence-transformers/all-MiniLM-L6-v2</code> mapped explicitly for lightweight CPU constraint compatibility.<br>
-    • <b>Global Threat Feed:</b> Live API pipeline linked to external incident reporters.<br>
-    • <b>Scan Module Engine:</b> Prompt-isolation design where the hardware parameters are statically analyzed by LLM without executing risky OS-level diagnostic commands.
-    </div>
-    """, unsafe_allow_html=True)
+
+
