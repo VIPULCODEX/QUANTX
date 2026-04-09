@@ -67,6 +67,17 @@ NEWS_API_KEY=your_newsapi_key_here
 ```
 
 ### Step 3: Run the Assistant
+
+You can run the assistant in two ways:
+
+**Option A: Web Interface (Recommended)**
+Provides a Matrix-style web UI with a sidebar and interactive chat.
+```bash
+streamlit run app.py
+```
+
+**Option B: Command Line Interface (CLI)**
+Runs entirely in your terminal.
 ```bash
 python main.py
 ```
@@ -74,7 +85,7 @@ python main.py
 That's it! The assistant will:
 1. Load the built-in knowledge base from `data/`
 2. Build a FAISS index (first run only — takes ~30 seconds)
-3. Launch the CLI interface
+3. Launch the chosen interface
 
 ---
 

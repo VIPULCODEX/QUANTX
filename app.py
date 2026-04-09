@@ -32,12 +32,24 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
+#  THEMES CONFIGURATION
+# ════════════════════════════════════════════════════════════════
+THEMES = {
+    "Matrix (Green)": { "P": "#00ff41", "S": "#00cc33", "UBG": "#00140a", "BBG": "#000d05", "T": "#b3ffcc", "A": "#ff4d00", "AT": "#ffb380", "CBG": "#030f03", "BG": "#000000" },
+    "Batman (Black/Yellow)": { "P": "#ffcc00", "S": "#808080", "UBG": "#1a1a1a", "BBG": "#050505", "T": "#ffffff", "A": "#ff1a1a", "AT": "#ff9999", "CBG": "#0a0a0a", "BG": "#000000" }
+}
+
+if "theme" not in st.session_state:
+    st.session_state.theme = "Matrix (Green)"
+
+# ════════════════════════════════════════════════════════════════
 #  MATRIX / DARK-WEB CSS + CANVAS RAIN ANIMATION
 # ════════════════════════════════════════════════════════════════
-MATRIX_STYLE = """
+MATRIX_STYLE_BASE = """
 <style>
 /* ── Google Font ── */
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
 
 /* ── Global Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; }
@@ -46,7 +58,7 @@ MATRIX_STYLE = """
 .stApp {
     background-color: #000000 !important;
     color: #00ff41 !important;
-    font-family: 'Share Tech Mono', monospace !important;
+    font-family: 'Share Tech Mono', 'Noto Color Emoji', monospace !important;
 }
 
 /* ── Matrix canvas overlay ── */
@@ -352,7 +364,8 @@ hr {
 [data-testid="stMetricValue"] { color: #00ff41 !important; font-size: 1.2rem !important; }
 
 /* ── Hide Streamlit branding ── */
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
+header { background-color: transparent !important; }
 .stDeployButton { display: none !important; }
 
 /* ── Scrollbar ── */
@@ -411,7 +424,17 @@ hr {
 """
 
 # ── Inject styles + canvas ───────────────────────────────────────
-st.markdown(MATRIX_STYLE, unsafe_allow_html=True)
+def get_theme_style(theme_name):
+    theme = THEMES[theme_name]
+    style = MATRIX_STYLE_BASE
+    style = style.replace("#00ff41", theme["P"]).replace("#00cc33", theme["S"])
+    style = style.replace("#00140a", theme["UBG"]).replace("#000d05", theme["BBG"])
+    style = style.replace("#b3ffcc", theme["T"]).replace("#ff4d00", theme["A"])
+    style = style.replace("#ffb380", theme["AT"]).replace("#030f03", theme["CBG"])
+    style = style.replace("background-color: #000000 !important;", f"background-color: {theme['BG']} !important;")
+    return style
+
+st.markdown(get_theme_style(st.session_state.theme), unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
 #  IMPORTS (after streamlit setup)
@@ -433,6 +456,91 @@ if "news_count" not in st.session_state:
     st.session_state.news_count = 0
 if "top_k" not in st.session_state:
     st.session_state.top_k = TOP_K
+if "show_animation" not in st.session_state:
+    st.session_state.show_animation = None
+
+# ════════════════════════════════════════════════════════════════
+#  THEME ANIMATION INJECTION
+# ════════════════════════════════════════════════════════════════
+if st.session_state.show_animation:
+    import streamlit.components.v1 as components
+    theme_name = st.session_state.show_animation
+    js_code = f"""
+    <script>
+        const overlay = window.parent.document.createElement("div");
+        overlay.id = "theme-anim-overlay";
+        Object.assign(overlay.style, {{
+            position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
+            zIndex: '999999', pointerEvents: 'none', overflow: 'hidden',
+            backgroundColor: 'rgba(0,0,0,0.3)', transition: 'opacity 1s ease-out'
+        }});
+        window.parent.document.body.appendChild(overlay);
+
+        const theme = "{theme_name}";
+        
+        function createParticle(content, cssProps, keyframes, duration) {{
+            const p = window.parent.document.createElement("div");
+            p.innerHTML = content;
+            Object.assign(p.style, {{ position: 'absolute', fontSize: '4rem', ...cssProps }});
+            overlay.appendChild(p);
+            p.animate(keyframes, {{ duration: duration, easing: 'ease-out', fill: 'forwards' }});
+        }}
+
+        if (theme === 'Matrix (Green)') {{
+            const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノABCDEF';
+            const numColumns = 50;
+            for(let i=0; i<numColumns; i++) {{
+                let colStr = '';
+                const length = 30 + Math.floor(Math.random() * 30); // Longer strings so they don't look cut off
+                for(let j=0; j<length; j++) {{
+                    colStr += chars[Math.floor(Math.random() * chars.length)] + '<br>';
+                }}
+                
+                // Alternate between falling down and floating up
+                const isFalling = (i % 2 === 0);
+                // clear way above and below to prevent "halfway" stop
+                const startY = isFalling ? '-100vh' : '110vh';
+                const endY = isFalling ? '200vh' : '-200vh'; 
+                
+                createParticle(colStr, {{ 
+                    left: (i * (100 / numColumns)) + '%', 
+                    top: startY, 
+                    color: '#00ff41', 
+                    fontFamily: '"Share Tech Mono", monospace', 
+                    fontSize: '1.2rem', 
+                    lineHeight: '1.0',
+                    textAlign: 'center',
+                    textShadow: '0 0 5px #00ff41, 0 0 10px #00cc33',
+                    opacity: 0.6 + Math.random()*0.4
+                }}, [
+                    {{ transform: 'translateY(0)' }},
+                    {{ transform: `translateY(${{endY}})` }}
+                ], 5000); // Animate scrolling for 5 seconds
+            }}
+        }} else if (theme === 'Batman (Black/Yellow)') {{
+            for(let i=0; i<80; i++) {{
+                createParticle('🦇', {{ 
+                    left: (Math.random() * 120 - 10) + '%', 
+                    top: '110vh',
+                    fontFamily: '"Noto Color Emoji", sans-serif',
+                    fontSize: (1.5 + Math.random() * 3.5) + 'rem',
+                    filter: 'drop-shadow(0px 0px 8px rgba(255, 204, 0, 0.6))',
+                    opacity: 0.7 + Math.random()*0.3
+                }}, [
+                    {{ transform: `translate(0, 0) scale(0.5) rotate(${{(Math.random()-0.5)*40}}deg)` }},
+                    {{ transform: `translate(${{(Math.random()-0.5)*60}}vw, -130vh) scale(${{1 + Math.random()*1.5}}) rotate(${{(Math.random()-0.5)*80}}deg)` }}
+                ], 1500 + Math.random()*3500);
+            }}
+        }}
+
+        setTimeout(() => {{
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.remove(), 1000);
+        }}, 5000); // 5s full visibility + 1s fade out
+    </script>
+    """
+    components.html(js_code, height=0, width=0)
+    st.session_state.show_animation = None
 
 
 # ════════════════════════════════════════════════════════════════
@@ -548,6 +656,9 @@ with st.sidebar:
 
     # Streaming toggle
     streaming = st.toggle("Typewriter Effect", value=True)
+    
+    # RAG toggle
+    use_rag = st.toggle("Enable RAG (Knowledge Base)", value=True)
 
     st.markdown("---")
     st.markdown('<div class="sidebar-title">// QUICK INTEL</div>', unsafe_allow_html=True)
@@ -585,12 +696,26 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════
 #  HEADER
 # ════════════════════════════════════════════════════════════════
-st.markdown("""
-<div class="cyber-header">
-    <h1>🛡 CYBERFRIEND AI</h1>
-    <p>// REAL-TIME THREAT INTELLIGENCE & CYBERSECURITY ADVISOR //</p>
-</div>
-""", unsafe_allow_html=True)
+col1, col2 = st.columns([8, 2])
+with col1:
+    st.markdown("""
+    <div class="cyber-header">
+        <h1>🛡 CYBERFRIEND AI</h1>
+        <p>// REAL-TIME THREAT INTELLIGENCE & CYBERSECURITY ADVISOR //</p>
+    </div>
+    """, unsafe_allow_html=True)
+with col2:
+    st.markdown('<div style="height: 1.5rem;"></div>', unsafe_allow_html=True)
+    selected_theme = st.selectbox(
+        "Theme",
+        list(THEMES.keys()),
+        index=list(THEMES.keys()).index(st.session_state.theme),
+        label_visibility="collapsed"
+    )
+    if selected_theme != st.session_state.theme:
+        st.session_state.theme = selected_theme
+        st.session_state.show_animation = selected_theme
+        st.rerun()
 st.markdown('<div class="term-divider">━━━━━━━━━━━━━━━━━━ SECURE CHANNEL ESTABLISHED ━━━━━━━━━━━━━━━━━━</div>', unsafe_allow_html=True)
 
 
@@ -636,78 +761,129 @@ if not st.session_state.pipeline_ready:
 # ════════════════════════════════════════════════════════════════
 #  CHAT HISTORY DISPLAY
 # ════════════════════════════════════════════════════════════════
-if not st.session_state.messages:
+tab1, tab2, tab3 = st.tabs(["💬 Chat & Intel", "🔍 System Analysis", "🏗️ System Architecture"])
+
+with tab1:
+    if not st.session_state.messages:
+        st.markdown("""
+        <div class="msg-bot" style="border-left-color:#4d9fff; color:#b3d1ff;">
+        SYSTEM READY. Welcome, operator.<br><br>
+        I am your cybersecurity intelligence assistant. I can:<br>
+        — Explain any cybersecurity attack or concept<br>
+        — Identify attack types from your scenario descriptions<br>
+        — Suggest immediate protective actions<br>
+        — Fetch real-time cybersecurity news & incidents<br><br>
+        <span style="color:#00ff41">Type your query below or select from the sidebar.</span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+        for msg in st.session_state.messages:
+            render_message(msg["role"], msg["content"], msg.get("type", "rag"))
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="term-divider">──────────────────────────────────────────────</div>', unsafe_allow_html=True)
+
+
+    # ════════════════════════════════════════════════════════════════
+    #  CHAT INPUT
+    # ════════════════════════════════════════════════════════════════
+    # Handle quick query buttons from sidebar
+    if "pending_query" in st.session_state:
+        user_input = st.session_state.pop("pending_query")
+    else:
+        user_input = st.chat_input("// ENTER QUERY — describe a scenario, ask a question, or request news...")
+
+    if user_input:
+        assistant = st.session_state.assistant
+
+        # Store user message
+        st.session_state.messages.append({"role": "user", "content": user_input, "type": "user"})
+        render_message("user", user_input)
+
+        # Determine type
+        news_words = ["today", "recent", "latest", "news", "incident", "breach", "happened", "current"]
+        is_news = any(w in user_input.lower() for w in news_words)
+
+        # Show thinking indicator
+        st.markdown('<div class="term-divider">// PROCESSING QUERY...</div>', unsafe_allow_html=True)
+
+        with st.spinner("// SCANNING KNOWLEDGE MATRIX..." if use_rag else "// PROCESSING RESPONSE (LLM ONLY)..."):
+            try:
+                response = assistant.respond(user_input, use_rag=use_rag)
+            except Exception as e:
+                response = f"[ERROR] Query failed: {str(e)}\n\nIf this is a quota error, please wait or use a new API key."
+
+        # Determine message type for display
+        msg_type = detect_message_type(user_input, response)
+
+        # Store assistant message
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": response,
+            "type": msg_type
+        })
+
+        # Update counters
+        st.session_state.query_count += 1
+        if is_news:
+            st.session_state.news_count += 1
+
+        # Render response
+        if streaming:
+            placeholder = st.empty()
+            stream_text(response, placeholder, delay=0.006)
+            # Replace with proper render after streaming
+            placeholder.empty()
+
+        render_message("assistant", response, msg_type)
+
+        st.rerun()
+
+with tab2:
+    st.markdown('<div class="sidebar-title">// SYSTEM VULNERABILITY SCAN</div>', unsafe_allow_html=True)
+    st.markdown("<p style='color:#00cc33; font-size: 0.85rem; font-family: \"Share Tech Mono\", monospace;'>Enter your system details to receive a static vulnerability analysis without executing local system scans. This keeps your device fully private and runs smoothly via the AI CPU pipeline.</p>", unsafe_allow_html=True)
+    
+    with st.form("sys_analysis_form"):
+        os_val = st.text_input("Operating System", placeholder="e.g., Windows 10, macOS Sonoma, Ubuntu 22.04")
+        browser_val = st.text_input("Primary Browser", placeholder="e.g., Chrome v120, Firefox, Safari")
+        av_val = st.text_input("Antivirus / Security Software", placeholder="e.g., Windows Defender, None")
+        activity_val = st.text_area("Recent Suspicious Activity", placeholder="e.g., 'Computer runs exceptionally slow, weird popups, missing files...'")
+        
+        analyze_btn = st.form_submit_button("Run Analysis")
+        
+    if analyze_btn:
+        if not os_val or not browser_val:
+            st.error("Please provide at least your Operating System and Browser.")
+        else:
+            with st.spinner("// ANALYZING SYSTEM PARAMETERS..."):
+                analysis_result = st.session_state.assistant.analyze_system(os_val, browser_val, av_val, activity_val)
+                st.markdown(f'<div class="msg-bot" style="border-left-color:#ff4d00;">{analysis_result}</div>', unsafe_allow_html=True)
+
+with tab3:
+    st.markdown('<div class="sidebar-title">// ARCHITECTURE & SPECIFICATIONS</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div class="msg-bot" style="border-left-color:#4d9fff; color:#b3d1ff;">
-    SYSTEM READY. Welcome, operator.<br><br>
-    I am your cybersecurity intelligence assistant. I can:<br>
-    — Explain any cybersecurity attack or concept<br>
-    — Identify attack types from your scenario descriptions<br>
-    — Suggest immediate protective actions<br>
-    — Fetch real-time cybersecurity news & incidents<br><br>
-    <span style="color:#00ff41">Type your query below or select from the sidebar.</span>
+    ```mermaid
+    graph TD;
+        User((Operator)) -->|Input Query| UI[Streamlit UI Interface]
+        UI --> Router{Query Router Engine}
+        Router -->|News Request| API[Live News API]
+        Router -->|Knowledge Query| RAG[FAISS Local Vector DB]
+        Router -->|System Scan| OS[System Analysis Engine]
+        API --> LLM[(Groq LLaMA Cloud Core)]
+        RAG -->|Contextual Data Object| LLM
+        OS --> LLM
+        LLM -->|Cyber Intelligence Payload| UI
+    ```
+    """)
+    st.markdown("""
+    <div class="msg-bot" style="border-left-color:#00ff41; margin-top:20px;">
+    <b>⚙️ Technical Specifications:</b><br><br>
+    • <b>Frontend Core:</b> Streamlit running isolated custom Python logic with real-time DOM injection (Canvas Overlays).<br>
+    • <b>LLM Inference Engine:</b> Hosted Groq Cloud architecture executing LLaMA models at rapid speeds, completely minimizing local CPU payload.<br>
+    • <b>Vector Retrieval System:</b> FAISS (Facebook AI Similarity Search) utilizing local CPU memory for rapid access while indexing knowledge arrays.<br>
+    • <b>Embedding Model:</b> <code>sentence-transformers/all-MiniLM-L6-v2</code> mapped explicitly for lightweight CPU constraint compatibility.<br>
+    • <b>Global Threat Feed:</b> Live API pipeline linked to external incident reporters.<br>
+    • <b>Scan Module Engine:</b> Prompt-isolation design where the hardware parameters are statically analyzed by LLM without executing risky OS-level diagnostic commands.
     </div>
     """, unsafe_allow_html=True)
-else:
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-    for msg in st.session_state.messages:
-        render_message(msg["role"], msg["content"], msg.get("type", "rag"))
-    st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('<div class="term-divider">──────────────────────────────────────────────</div>', unsafe_allow_html=True)
-
-
-# ════════════════════════════════════════════════════════════════
-#  CHAT INPUT
-# ════════════════════════════════════════════════════════════════
-# Handle quick query buttons from sidebar
-if "pending_query" in st.session_state:
-    user_input = st.session_state.pop("pending_query")
-else:
-    user_input = st.chat_input("// ENTER QUERY — describe a scenario, ask a question, or request news...")
-
-if user_input:
-    assistant = st.session_state.assistant
-
-    # Store user message
-    st.session_state.messages.append({"role": "user", "content": user_input, "type": "user"})
-    render_message("user", user_input)
-
-    # Determine type
-    news_words = ["today", "recent", "latest", "news", "incident", "breach", "happened", "current"]
-    is_news = any(w in user_input.lower() for w in news_words)
-
-    # Show thinking indicator
-    st.markdown('<div class="term-divider">// PROCESSING QUERY...</div>', unsafe_allow_html=True)
-
-    with st.spinner("// SCANNING KNOWLEDGE MATRIX..."):
-        try:
-            response = assistant.respond(user_input)
-        except Exception as e:
-            response = f"[ERROR] Query failed: {str(e)}\n\nIf this is a quota error, please wait or use a new API key."
-
-    # Determine message type for display
-    msg_type = detect_message_type(user_input, response)
-
-    # Store assistant message
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": response,
-        "type": msg_type
-    })
-
-    # Update counters
-    st.session_state.query_count += 1
-    if is_news:
-        st.session_state.news_count += 1
-
-    # Render response
-    if streaming:
-        placeholder = st.empty()
-        stream_text(response, placeholder, delay=0.006)
-        # Replace with proper render after streaming
-        placeholder.empty()
-
-    render_message("assistant", response, msg_type)
-
-    st.rerun()

@@ -32,7 +32,7 @@ Instructions:
   Attack Type: [identify the most likely attack]
   Explanation: [explain it clearly in simple language]
   What to Do: [give 3–5 concrete steps the user should take]
-  Confidence: [High / Medium / Low – based on context match]
+  Confidence: [High / Medium / Low – based on context match] (L2 Distance: [Include the L2 Distance of the most relevant chunk used])
 
 - If it is a GENERAL CYBERSECURITY QUESTION (e.g., "What is phishing?", "How does ransomware work?"):
   Give a clear, educational answer.
@@ -58,6 +58,27 @@ Impact: [who is affected and what the consequences might be]
 ---
 
 Keep summaries factual and avoid speculation.
+""")
+
+SYSTEM_ANALYSIS_PROMPT = ChatPromptTemplate.from_template("""You are a cybersecurity system analyzer.
+Based on the following user-provided system details, perform a security analysis. Do NOT attempt to run any actual system commands. Assure the user that the analysis is based solely on their input for their privacy.
+
+User System Details:
+- Operating System: {os}
+- Browser: {browser}
+- Antivirus Status: {av}
+- Recent Suspicious Activity: {activity}
+
+Provide your analysis in EXACTLY this format:
+
+### 1. Potential Vulnerabilities
+[List 2-3 potential risks based on their OS, browser, or AV status]
+
+### 2. Activity Assessment
+[Analyze the "Recent Suspicious Activity". Is it a known threat? Explain it.]
+
+### 3. Recommended Actions
+[List 3-4 concrete steps they should take immediately to improve security]
 """)
 
 
@@ -89,11 +110,19 @@ class CybersecurityAssistant:
         """Build the LangChain RAG chain."""
 
         def retrieve_context(query: str) -> str:
-            """Retrieve relevant docs and join them into a single context string."""
-            docs = self.retriever.invoke(query)
-            if not docs:
+            """Retrieve relevant docs and join them into a single context string with L2 distance."""
+            vectorstore = self.retriever.vectorstore
+            k = self.retriever.search_kwargs.get("k", 4)
+            docs_and_scores = vectorstore.similarity_search_with_score(query, k=k)
+            
+            if not docs_and_scores:
                 return "No relevant information found in knowledge base."
-            return "\n\n".join(doc.page_content for doc in docs)
+            
+            context_parts = []
+            for doc, score in docs_and_scores:
+                context_parts.append(f"[L2 Distance: {score:.4f}]\n{doc.page_content}")
+                
+            return "\n\n".join(context_parts)
 
         self.rag_chain = (
             {
@@ -145,13 +174,46 @@ class CybersecurityAssistant:
             return f"[!] Error generating response: {str(e)}"
 
     # ──────────────────────────────────────
+    # Base LLM Response (No RAG)
+    # ──────────────────────────────────────
+    def get_llm_response(self, query: str) -> str:
+        """Answer a query directly using the LLM without knowledge base context."""
+        print("  [*] Answering directly via LLM...")
+        try:
+            general_prompt = ChatPromptTemplate.from_template(
+                "You are a friendly and knowledgeable cybersecurity expert assistant. "
+                "Answer the user's question clearly and accurately.\n\nUser Question: {question}"
+            )
+            chain = general_prompt | self.llm | self.output_parser
+            return chain.invoke({"question": query})
+        except Exception as e:
+            return f"[!] Error generating response: {str(e)}"
+
+    # ──────────────────────────────────────
+    # System Analysis Response
+    # ──────────────────────────────────────
+    def analyze_system(self, os_val: str, browser_val: str, av_val: str, activity_val: str) -> str:
+        """Analyze user system inputs for vulnerabilities."""
+        print("  [*] Analyzing user system inputs...")
+        try:
+            chain = SYSTEM_ANALYSIS_PROMPT | self.llm | self.output_parser
+            return chain.invoke({
+                "os": os_val,
+                "browser": browser_val,
+                "av": av_val,
+                "activity": activity_val
+            })
+        except Exception as e:
+            return f"[!] Error during system analysis: {str(e)}"
+
+    # ──────────────────────────────────────
     # Main Entry Point
     # ──────────────────────────────────────
-    def respond(self, query: str) -> str:
+    def respond(self, query: str, use_rag: bool = True) -> str:
         """
         Route query to appropriate handler:
         - News keywords → NewsAPI + LLM summary
-        - Everything else → RAG pipeline
+        - Everything else → RAG pipeline or direct LLM
         """
         query = query.strip()
         if not query:
@@ -160,4 +222,8 @@ class CybersecurityAssistant:
         if self.is_news_query(query):
             return self.get_news_response()
         else:
-            return self.get_rag_response(query)
+            if use_rag:
+                return self.get_rag_response(query)
+            else:
+                return self.get_llm_response(query)
+

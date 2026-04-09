@@ -311,22 +311,27 @@ MFA adds an extra layer of security by requiring a second verification step beyo
 SECTION 9: ZERO-DAY EXPLOITS
 ==============================
 
-What is a Zero-Day Exploit?
+Definition:
 A zero-day exploit is an attack that targets a software vulnerability that is unknown to the software vendor or has not yet been patched. The term "zero-day" means developers have had zero days to fix the flaw.
 
-Why Zero-Days Are Dangerous:
-- No patch exists at the time of attack
-- Traditional signature-based antivirus cannot detect them
-- High value on cybercriminal markets
-- Often used in advanced persistent threats (APTs) and nation-state attacks
+Working:
+Attackers discover a vulnerability in a system and write code to exploit it before the vendor is aware. The exploit is deployed silently to gain unauthorized access or distribute malware.
 
-How to Reduce Zero-Day Risk:
-1. Keep all software and OS updated (patches reduce the attack surface).
-2. Use behavior-based security tools that detect anomalies.
-3. Apply the principle of least privilege.
-4. Use network segmentation.
-5. Monitor system logs for unusual activity.
-6. Subscribe to threat intelligence feeds (CISA, US-CERT).
+Detection:
+- Cannot be detected by traditional signature-based antivirus.
+- Identified through behavioral anomalies or heuristic analysis.
+- Unexpected system crashes or unrecognized network traffic.
+
+Impact:
+- Complete system compromise or data theft before patches exist.
+- Used in severe nation-state attacks or advanced persistent threats.
+- High financial and reputational damage.
+
+Prevention:
+- Keep all software and OS updated immediately when patches drop to reduce exposed windows.
+- Use behavior-based endpoint detection and response (EDR) tools.
+- Apply the principle of least privilege and network segmentation.
+- Monitor system logs for unusual activity.
 
 
 SECTION 10: INSIDER THREATS
@@ -470,3 +475,73 @@ What to Do If You Entered Info on a Fake Site:
 3. Monitor your bank account if financial info was entered.
 4. Enable MFA on affected accounts.
 5. Run an antivirus scan on your device.
+
+
+SECTION 16: QUANTUM CRYPTOGRAPHY ATTACKS
+==============================
+
+Definition:
+Quantum cryptography attacks involve the use of quantum computing algorithms, such as Shor's Algorithm or Grover's Algorithm, to factor large prime numbers and break classical public-key cryptography systems like RSA and ECC.
+
+Working:
+A powerful quantum computer uses quantum bits (qubits) and superposition to perform massive parallel calculations. Shor's Algorithm can find the prime factors of an integer exponentially faster than any classical algorithm, cracking standard encryption.
+
+Detection:
+- Extremely difficult to detect prior to data decryption because intercepted network traffic looks identical.
+- "Harvest now, decrypt later" approach: encrypted data is secretly recorded today to be decrypted when powerful quantum computers emerge.
+
+Impact:
+- Complete compromise of current internet encryption standards (HTTPS, VPNs, secure emails).
+- Massive exposure of highly sensitive historical and real-time data.
+
+Prevention:
+- Transition to Post-Quantum Cryptography (PQC) standards.
+- Employ much larger key sizes for symmetric algorithms (e.g., AES-256).
+- Implement quantum key distribution (QKD) where feasible.
+
+
+SECTION 17: POST-QUANTUM CRYPTOGRAPHY (PQC)
+==============================
+
+Definition:
+Post-quantum cryptography refers to cryptographic algorithms (usually public-key algorithms) designed to be secure against cryptanalytic attacks by both classical and powerful quantum computers.
+
+Working:
+Unlike RSA or ECC which rely on prime factorization or discrete logarithms, PQC uses completely different mathematical problems that are hard for quantum computers. Common approaches include Lattice-based geometry, Hash-based signatures, and Multivariate equations.
+
+Detection:
+- PQC systems themselves generate unique handshakes and larger key sizes that can be detected on network monitoring tools compared to legacy systems.
+
+Impact:
+- Secures critical data and communications across the internet against future quantum threats.
+- Future-proofs data infrastructure, preventing the "harvest now, decrypt later" strategy.
+
+Prevention:
+- Proactively adopt NIST-approved post-quantum algorithms (e.g., Kyber, Dilithium).
+- Establish a cryptographic inventory to identify where legacy algorithms are used in your system.
+- Upgrade infrastructure to support hybrid PQC architectures.
+
+
+SECTION 18: ADVANCED PERSISTENT THREATS (APT)
+==============================
+
+Definition:
+An Advanced Persistent Threat (APT) is a prolonged and targeted cyberattack in which an intruder gains access to a network and remains undetected for an extended period, usually orchestrated by well-funded nation-state groups.
+
+Working:
+The attack occurs in phases: initial compromise (usually via spear-phishing or zero-days), establishing a foothold (backdoors), lateral movement (escalating privileges across the network), maintaining stealth, and performing slow data exfiltration over months or years.
+
+Detection:
+- Very difficult due to their "low and slow" evasion techniques.
+- Identified by checking for unexplained account activities or large, unusual outbound data flows especially late at night.
+- Utilizing active cyber threat hunting and anomaly detection algorithms.
+
+Impact:
+- Stealthy exfiltration of highly sensitive data (intellectual property, state secrets).
+- Complete architectural compromise of large organization infrastructure.
+- Long-term surveillance and deep espionage.
+
+Prevention:
+- Leverage advanced Network Traffic Analysis (NTA) and Endpoint Detection and Response (EDR).
+- Enforce strict network segmentation and zero-trust verification.
+- Use behavioral analytics and continuously monitor access logs.
