@@ -77,6 +77,7 @@ MATRIX_STYLE_BASE = """
     z-index: 1;
     padding-top: 1rem !important;
     max-width: 1100px !important;
+    margin: 0 auto !important;
 }
 
 /* ── Sidebar ── */
@@ -291,6 +292,10 @@ MATRIX_STYLE_BASE = """
     color: #000 !important;
     box-shadow: 0 0 15px #00ff4155 !important;
 }
+.stButton > button:hover * {
+    color: #000000 !important;
+}
+
 
 /* ── Spinner ── */
 .stSpinner > div {
