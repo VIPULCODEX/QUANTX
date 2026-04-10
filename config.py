@@ -1,5 +1,5 @@
 """
-config.py – Central configuration for Cybersecurity Friend AI Assistant
+config.py – Central configuration for QuantX AI Assistant
 All API keys are read from .env file using python-dotenv
 """
 

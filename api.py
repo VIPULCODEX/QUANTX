@@ -5,7 +5,7 @@ from rag_pipeline import RAGPipeline
 from assistant import CybersecurityAssistant
 from config import TOP_K
 
-app = FastAPI(title="Cyberfriend AI API")
+app = FastAPI(title="QuantX AI API")
 
 # Initialize pipeline once on startup
 print("Initializing RAG Pipeline...")

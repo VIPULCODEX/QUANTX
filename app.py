@@ -1,5 +1,5 @@
 """
-app.py – Streamlit UI for Cybersecurity Friend AI Assistant
+app.py – Streamlit UI for QuantX AI Assistant
 Run: streamlit run app.py
 Dark Web / Matrix Theme with real-time feel
 """
@@ -25,7 +25,7 @@ load_dotenv()
 
 # ── Page config (MUST be first Streamlit call) ───────────────────
 st.set_page_config(
-    page_title="CyberFriend AI",
+    page_title="QuantX AI",
     page_icon="🛡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -707,7 +707,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         '<div style="font-size:0.65rem; color:#00ff4155; text-align:center; letter-spacing:2px;">'
-        'CYBERFRIEND v1.0<br>RAG + GEMINI + NEWSAPI<br>'
+        'QUANTX v1.0<br>RAG + GEMINI + NEWSAPI<br>'
         '// STAY SECURE //'
         '</div>',
         unsafe_allow_html=True
@@ -719,7 +719,7 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <div class="cyber-header">
-    <h1>🛡 CYBERFRIEND AI</h1>
+    <h1>🛡 QUANTX AI</h1>
     <p>// REAL-TIME THREAT INTELLIGENCE & CYBERSECURITY ADVISOR //</p>
 </div>
 """, unsafe_allow_html=True)

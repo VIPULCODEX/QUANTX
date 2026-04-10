@@ -1,4 +1,4 @@
-# 🛡️ Cybersecurity Friend – AI Assistant
+# 🛡️ QuantX – AI Assistant
 
 A Python-based AI assistant that explains cybersecurity concepts, identifies attack types from real user scenarios, suggests preventive actions, and fetches real-time cybersecurity news — all powered by RAG + Gemini + HuggingFace.
 
