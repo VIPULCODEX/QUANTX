@@ -39,6 +39,8 @@ THEMES = {
         "P": "#00FF9F",   # Primary Neon Green
         "S": "#00CFFF",   # Secondary Electric Blue
         "A": "#FF004D",   # Accent Pink/Red
+        "AM": "#FFC857",  # Amber/Warning
+        "DG": "#0B3D2E",  # Dark Green Tactical
         "BG": "#020202",  # Background
         "UBG": "rgba(0, 255, 159, 0.05)", 
         "BBG": "rgba(0, 207, 255, 0.05)",
@@ -110,15 +112,15 @@ MATRIX_STYLE_BASE = """
 .cyber-header h1 {
     font-size: 2.2rem;
     font-weight: 900;
-    color: #00FF9F;
-    text-shadow: 0 0 15px rgba(0, 255, 159, 0.7), 0 0 30px rgba(0, 255, 159, 0.3);
+    color: #FFC857;
+    text-shadow: 0 0 15px rgba(255, 200, 87, 0.7), 0 0 30px rgba(255, 200, 87, 0.3);
     letter-spacing: 6px;
     text-transform: uppercase;
-    animation: neonPulse 3s infinitealternate;
+    animation: neonPulse 3s infinite alternate;
 }
 @keyframes neonPulse {
-    from { text-shadow: 0 0 10px rgba(0, 255, 159, 0.5); }
-    to { text-shadow: 0 0 25px rgba(0, 255, 159, 0.8), 0 0 45px rgba(0, 255, 159, 0.4); }
+    from { text-shadow: 0 0 10px rgba(255, 200, 87, 0.5); }
+    to { text-shadow: 0 0 25px rgba(255, 200, 87, 0.8), 0 0 45px rgba(255, 200, 87, 0.4); }
 }
 .cyber-header p {
     color: #00cc33;
@@ -151,6 +153,91 @@ MATRIX_STYLE_BASE = """
     );
     pointer-events: none;
     z-index: 0;
+}
+
+/* ── Threat Indicator ── */
+.threat-container {
+    padding: 10px;
+    background: rgba(11, 61, 46, 0.3);
+    border: 1px solid rgba(0, 255, 159, 0.2);
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+.threat-bar {
+    height: 10px;
+    width: 100%;
+    background: #1a1a1a;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.threat-fill {
+    height: 100%;
+    transition: width 0.5s ease-in-out, background 0.5s;
+}
+
+/* ── Radar ── */
+.radar-box {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 10px 0 25px 0;
+}
+.radar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 255, 159, 0.4);
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(circle, rgba(11, 61, 46, 0.5) 0%, transparent 70%);
+}
+.radar::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 10%; right: 10%;
+    height: 1px; background: rgba(0, 255, 159, 0.2);
+}
+.radar::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 200%; height: 200%;
+    background: conic-gradient(from 0deg, rgba(0, 255, 159, 0.3) 0%, transparent 25%);
+    transform: translate(-50%, -50%);
+    animation: rotate 4s linear infinite;
+    pointer-events: none;
+}
+@keyframes rotate {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ── System Logs ── */
+.log-container {
+    background: rgba(0, 0, 0, 0.8) !important;
+    border: 1px solid rgba(0, 255, 159, 0.2) !important;
+    border-radius: 4px;
+    padding: 10px;
+    height: 180px;
+    font-size: 0.7rem !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    color: #00FF9F !important;
+    overflow-y: hidden;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 4px;
+    box-shadow: inset 0 0 10px rgba(0, 255, 159, 0.1);
+}
+.log-line {
+    border-left: 2px solid rgba(0, 255, 159, 0.3);
+    padding-left: 8px;
+    animation: logFadeIn 0.3s ease-out;
+}
+@keyframes logFadeIn {
+    from { opacity: 0; transform: translateX(-5px); }
+    to { opacity: 1; transform: translateX(0); }
 }
 
 /* ── Glassmorphism Utility ── */
@@ -513,12 +600,23 @@ if "assistant" not in st.session_state:
     st.session_state.assistant = None      # assistant object
 if "pipeline_ready" not in st.session_state:
     st.session_state.pipeline_ready = False
+if "top_k" not in st.session_state:
+    st.session_state.top_k = TOP_K
 if "query_count" not in st.session_state:
     st.session_state.query_count = 0
 if "news_count" not in st.session_state:
     st.session_state.news_count = 0
-if "top_k" not in st.session_state:
-    st.session_state.top_k = TOP_K
+if "logs" not in st.session_state:
+    st.session_state.logs = ["[SYSTEM] Initializing tactical interface...", "[INFO] Secure connection established."]
+if "threat_level" not in st.session_state:
+    st.session_state.threat_level = 15  # Percent (Low)
+
+def add_log(msg: str):
+    """Add a new timestamped log to the session state logs."""
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+    st.session_state.logs.insert(0, f"[{timestamp}] {msg}")
+    st.session_state.logs = st.session_state.logs[:15]  # Keep last 15
 if "show_animation" not in st.session_state:
     st.session_state.show_animation = "Matrix (Green)"
 
@@ -658,29 +756,48 @@ def render_message(role: str, content: str, msg_type: str = "rag"):
 #  SIDEBAR
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown('<div class="sidebar-title">// SYSTEM PANEL</div>', unsafe_allow_html=True)
-    st.markdown("---")
+    st.markdown(f'<div class="sidebar-title">🛡 QUANTX TACTICAL</div>', unsafe_allow_html=True)
+    
+    # --- THREAT LEVEL ---
+    level = st.session_state.threat_level
+    color = "#00FF9F" if level < 30 else ("#FFC857" if level < 60 else "#FF004D")
+    label = "LOW" if level < 30 else ("ELEVATED" if level < 60 else "CRITICAL")
+    
+    st.markdown(f"""
+    <div class="threat-container">
+        <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:{color}; font-weight:bold;">
+            <span>THREAT LEVEL</span>
+            <span>{label}</span>
+        </div>
+        <div class="threat-bar">
+            <div class="threat-fill" style="width:{level}%; background:{color}; box-shadow:0 0 10px {color}77;"></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Status indicator
+    # --- RADAR ---
+    st.markdown('<div class="radar-box"><div class="radar"></div></div>', unsafe_allow_html=True)
+
+    # --- STATUS BAR ---
     if st.session_state.pipeline_ready:
         st.markdown(
-            '<span class="status-dot"></span><small style="color:#00ff41">SYSTEM ONLINE</small>',
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            '<span style="color:#ff4d00">● INITIALIZING...</span>',
+            '<div style="text-align:center; padding-bottom:10px;"><span class="status-dot"></span><small style="color:#00FF9F">SYSTEM ONLINE</small></div>',
             unsafe_allow_html=True
         )
 
-    st.markdown("---")
-
-    # Stats
+    # --- STATS ---
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Queries", st.session_state.query_count)
     with col2:
         st.metric("News Intel", st.session_state.news_count)
+
+    st.markdown("---")
+    st.markdown('<div class="sidebar-title">// SYSTEM LOGS</div>', unsafe_allow_html=True)
+    
+    # --- LOGS ---
+    log_html = "".join([f'<div class="log-line">{log}</div>' for log in st.session_state.logs])
+    st.markdown(f'<div class="log-container">{log_html}</div>', unsafe_allow_html=True)
 
     st.markdown("---")
     st.markdown('<div class="sidebar-title">// SETTINGS</div>', unsafe_allow_html=True)
@@ -728,7 +845,6 @@ with st.sidebar:
         st.session_state.news_count = 0
         st.rerun()
 
-    # Footer removed as requested
     st.markdown("---")
 
 
@@ -821,6 +937,16 @@ with tab1:
 
     if user_input:
         assistant = st.session_state.assistant
+        st.session_state.query_count += 1
+        
+        # Threat level logic (random fluctuation + increase on specific keywords)
+        import random
+        st.session_state.threat_level = min(95, max(10, st.session_state.threat_level + random.randint(-5, 8)))
+        if any(w in user_input.lower() for w in ["hack", "attack", "breach", "malware", "ransomware"]):
+            st.session_state.threat_level = min(100, st.session_state.threat_level + 15)
+            add_log(f"ALERT: Suspicious pattern detected in query: {user_input[:20]}...")
+        else:
+            add_log(f"ANALYZING: {user_input[:30]}...")
 
         # Store user message
         st.session_state.messages.append({"role": "user", "content": user_input, "type": "user"})
