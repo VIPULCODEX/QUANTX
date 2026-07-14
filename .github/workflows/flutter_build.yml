@@ -34,7 +34,8 @@ jobs:
         working-directory: ./cyber_intel_app
         run: |
           rm -rf android
-          flutter create . --platforms android
+          # Force the organization to com.quantx to match our custom Kotlin code package
+          flutter create . --platforms android --org com.quantx
 
           # ── Restore custom native code ──────────────────────────────────
           cp -r android_custom/* android/
@@ -64,14 +65,23 @@ jobs:
           fi
 
           # ── Add OkHttp + Coroutines dependencies to app build file ──────
-          # Our QuantXScannerService.kt uses okhttp3 and kotlinx.coroutines.
-          # These must be declared in the app-level build file.
+          # Gradle allows multiple dependencies blocks, so we safely append one at the end.
           if [ -f "android/app/build.gradle.kts" ]; then
-            # Append inside the dependencies block using Kotlin DSL syntax
-            sed -i '/^dependencies {/a\    implementation("com.squareup.okhttp3:okhttp:4.12.0")\n    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")' android/app/build.gradle.kts
+            cat << 'EOF' >> android/app/build.gradle.kts
+
+dependencies {
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+}
+EOF
           elif [ -f "android/app/build.gradle" ]; then
-            # Append inside the dependencies block using Groovy syntax
-            sed -i '/^dependencies {/a\    implementation "com.squareup.okhttp3:okhttp:4.12.0"\n    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"' android/app/build.gradle
+            cat << 'EOF' >> android/app/build.gradle
+
+dependencies {
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+}
+EOF
           fi
 
           echo "=== Updated gradle file ==="
