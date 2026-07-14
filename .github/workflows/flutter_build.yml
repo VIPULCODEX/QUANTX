@@ -67,21 +67,15 @@ jobs:
           # ── Add OkHttp + Coroutines dependencies to app build file ──────
           # Gradle allows multiple dependencies blocks, so we safely append one at the end.
           if [ -f "android/app/build.gradle.kts" ]; then
-            cat << 'EOF' >> android/app/build.gradle.kts
-
-dependencies {
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-}
-EOF
+            echo "dependencies {" >> android/app/build.gradle.kts
+            echo "    implementation(\"com.squareup.okhttp3:okhttp:4.12.0\")" >> android/app/build.gradle.kts
+            echo "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3\")" >> android/app/build.gradle.kts
+            echo "}" >> android/app/build.gradle.kts
           elif [ -f "android/app/build.gradle" ]; then
-            cat << 'EOF' >> android/app/build.gradle
-
-dependencies {
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
-}
-EOF
+            echo "dependencies {" >> android/app/build.gradle
+            echo "    implementation 'com.squareup.okhttp3:okhttp:4.12.0'" >> android/app/build.gradle
+            echo "    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'" >> android/app/build.gradle
+            echo "}" >> android/app/build.gradle
           fi
 
           echo "=== Updated gradle file ==="
