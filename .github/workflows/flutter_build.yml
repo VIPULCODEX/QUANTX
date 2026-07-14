@@ -3,8 +3,9 @@ name: Build Flutter APK
 on:
   push:
     paths:
-      - 'cyber_intel_app/**' # Only run when Flutter code changes
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+      - 'cyber_intel_app/**'
+      - '.github/workflows/flutter_build.yml'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -34,23 +35,51 @@ jobs:
         run: |
           rm -rf android
           flutter create . --platforms android
-          
-          # Restore our custom native Kotlin code (Accessibility Scanner, MainActivity, etc.)
+
+          # ── Restore custom native code ──────────────────────────────────
           cp -r android_custom/* android/
-          
-          # Newer Flutter versions generate build.gradle.kts instead of build.gradle.
-          # We need to update minSdk/compileSdk in whichever file exists.
+
+          # ── Print build files for diagnosis ─────────────────────────────
+          echo "=== build.gradle ==="
+          cat android/app/build.gradle 2>/dev/null || echo "no build.gradle"
+          echo "=== build.gradle.kts ==="
+          cat android/app/build.gradle.kts 2>/dev/null || echo "no build.gradle.kts"
+
+          # ── Update minSdk + compileSdk (handle both Groovy and Kotlin DSL) ──
           if [ -f "android/app/build.gradle.kts" ]; then
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle.kts
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' android/app/build.gradle.kts
-          elif [ -f "android/app/build.gradle" ]; then
-            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
-            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
+            GRADLE_FILE="android/app/build.gradle.kts"
+            # Replace the minSdk and compileSdk lines regardless of exact value used
+            sed -i 's/minSdk\s*=\s*[^$][0-9]*/minSdk = 21/g' "$GRADLE_FILE"
+            sed -i 's/compileSdk\s*=\s*[^$][0-9]*/compileSdk = 34/g' "$GRADLE_FILE"
+            # Also handle flutter reference style
+            sed -i 's/minSdk = flutter\.minSdkVersion/minSdk = 21/g' "$GRADLE_FILE"
+            sed -i 's/compileSdk = flutter\.compileSdkVersion/compileSdk = 34/g' "$GRADLE_FILE"
+          fi
+          if [ -f "android/app/build.gradle" ]; then
+            GRADLE_FILE="android/app/build.gradle"
+            sed -i 's/minSdkVersion\s*flutter\.minSdkVersion/minSdkVersion 21/g' "$GRADLE_FILE"
+            sed -i 's/compileSdkVersion\s*flutter\.compileSdkVersion/compileSdkVersion 34/g' "$GRADLE_FILE"
+            sed -i 's/minSdkVersion\s*[0-9]*/minSdkVersion 21/g' "$GRADLE_FILE"
+            sed -i 's/compileSdkVersion\s*[0-9]*/compileSdkVersion 34/g' "$GRADLE_FILE"
           fi
 
-      - name: Build APK
+          # ── Add OkHttp + Coroutines dependencies to app build file ──────
+          # Our QuantXScannerService.kt uses okhttp3 and kotlinx.coroutines.
+          # These must be declared in the app-level build file.
+          if [ -f "android/app/build.gradle.kts" ]; then
+            # Append inside the dependencies block using Kotlin DSL syntax
+            sed -i '/^dependencies {/a\    implementation("com.squareup.okhttp3:okhttp:4.12.0")\n    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")' android/app/build.gradle.kts
+          elif [ -f "android/app/build.gradle" ]; then
+            # Append inside the dependencies block using Groovy syntax
+            sed -i '/^dependencies {/a\    implementation "com.squareup.okhttp3:okhttp:4.12.0"\n    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"' android/app/build.gradle
+          fi
+
+          echo "=== Updated gradle file ==="
+          cat android/app/build.gradle.kts 2>/dev/null || cat android/app/build.gradle 2>/dev/null
+
+      - name: Build APK (verbose)
         working-directory: ./cyber_intel_app
-        run: flutter build apk --release
+        run: flutter build apk --release --verbose
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
