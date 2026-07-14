@@ -13,7 +13,11 @@ USER user
 
 # Set up environment variables for the user
 ENV HOME=/home/user \
-    PATH=/home/user/.local/bin:$PATH
+    PATH=/home/user/.local/bin:$PATH \
+    # Cache HuggingFace models inside the container (avoids re-downloading on each request)
+    HF_HOME=/home/user/.cache/huggingface \
+    TRANSFORMERS_CACHE=/home/user/.cache/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/home/user/.cache/sentence_transformers
 
 # Set the working directory
 WORKDIR $HOME/app
@@ -22,6 +26,10 @@ WORKDIR $HOME/app
 COPY --chown=user:user requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
+# Pre-download the embedding model at BUILD TIME so startup is instant
+# (This bakes the model into the Docker image — no cold-start delay)
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+
 # Copy the rest of the application
 COPY --chown=user:user . .
 
@@ -29,5 +37,15 @@ COPY --chown=user:user . .
 EXPOSE 7860
 ENV PORT=7860
 
-# Command to run our FastAPI backend (With gunicorn for better performance here)
-CMD ["gunicorn", "api:app", "--workers", "2", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:7860", "--timeout", "120"]
+# ── FIXED: 1 worker (not 2) prevents OOM on HF free tier ──────────────────
+# --workers 1      : Only 1 process. 2 workers × embedding model = OOM kill.
+# --timeout 300    : Give the RAG pipeline + FAISS index 5 min to load.
+# --preload        : Load the app in master, fork workers (saves RAM).
+# --keep-alive 5   : Keep connections alive between requests.
+CMD ["gunicorn", "api:app", \
+     "--workers", "1", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--bind", "0.0.0.0:7860", \
+     "--timeout", "300", \
+     "--preload", \
+     "--keep-alive", "5"]
