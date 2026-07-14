@@ -34,8 +34,13 @@ jobs:
         run: |
           rm -rf android
           flutter create . --platforms android
-          sed -i 's/android:label="cyber_intel_app"/android:label="QuantX"/g' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <application/g' android/app/src/main/AndroidManifest.xml
+          
+          # Restore our custom native Kotlin code (Accessibility Scanner, MainActivity, etc.)
+          cp -r android_custom/* android/
+          
+          # app_settings and network_info_plus require higher Android SDK versions
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
 
       - name: Build APK
         working-directory: ./cyber_intel_app
