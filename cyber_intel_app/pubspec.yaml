@@ -20,6 +20,7 @@ dependencies:
   device_info_plus: ^10.1.0       # Android version and device details
   installed_apps: ^1.4.0          # List installed apps for audit
   permission_handler: ^11.3.1     # Request runtime permissions cleanly
+  app_settings: ^5.1.1            # Open Android system settings screens directly
 
 dev_dependencies:
   flutter_test:
