@@ -67,17 +67,19 @@ jobs:
           fi
 
           # ── Add OkHttp + Coroutines dependencies to app build file ──────
-          # Gradle allows multiple dependencies blocks, so we safely append one at the end.
           if [ -f "android/app/build.gradle.kts" ]; then
-            echo "dependencies {" >> android/app/build.gradle.kts
-            echo "    implementation(\"com.squareup.okhttp3:okhttp:4.12.0\")" >> android/app/build.gradle.kts
-            echo "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3\")" >> android/app/build.gradle.kts
-            echo "}" >> android/app/build.gradle.kts
-          elif [ -f "android/app/build.gradle" ]; then
-            echo "dependencies {" >> android/app/build.gradle
-            echo "    implementation 'com.squareup.okhttp3:okhttp:4.12.0'" >> android/app/build.gradle
-            echo "    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'" >> android/app/build.gradle
-            echo "}" >> android/app/build.gradle
+            GRADLE_FILE="android/app/build.gradle.kts"
+            echo "dependencies {" >> "$GRADLE_FILE"
+            echo "    implementation(\"com.squareup.okhttp3:okhttp:4.12.0\")" >> "$GRADLE_FILE"
+            echo "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3\")" >> "$GRADLE_FILE"
+            echo "}" >> "$GRADLE_FILE"
+          fi
+          if [ -f "android/app/build.gradle" ]; then
+            GRADLE_FILE="android/app/build.gradle"
+            echo "dependencies {" >> "$GRADLE_FILE"
+            echo "    implementation 'com.squareup.okhttp3:okhttp:4.12.0'" >> "$GRADLE_FILE"
+            echo "    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'" >> "$GRADLE_FILE"
+            echo "}" >> "$GRADLE_FILE"
           fi
 
           echo "=== Updated gradle file ==="
