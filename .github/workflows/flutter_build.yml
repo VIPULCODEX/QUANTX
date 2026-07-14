@@ -38,9 +38,15 @@ jobs:
           # Restore our custom native Kotlin code (Accessibility Scanner, MainActivity, etc.)
           cp -r android_custom/* android/
           
-          # app_settings and network_info_plus require higher Android SDK versions
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
-          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
+          # Newer Flutter versions generate build.gradle.kts instead of build.gradle.
+          # We need to update minSdk/compileSdk in whichever file exists.
+          if [ -f "android/app/build.gradle.kts" ]; then
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle.kts
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' android/app/build.gradle.kts
+          elif [ -f "android/app/build.gradle" ]; then
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
+            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
+          fi
 
       - name: Build APK
         working-directory: ./cyber_intel_app
