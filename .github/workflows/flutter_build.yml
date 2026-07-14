@@ -30,70 +30,21 @@ jobs:
         working-directory: ./cyber_intel_app
         run: flutter pub get
 
-      - name: Recreate Android Project
+      - name: Write local.properties
         working-directory: ./cyber_intel_app
         run: |
-          rm -rf android
-          # Force the organization to com.quantx to match our custom Kotlin code package
-          flutter create . --platforms android --org com.quantx
+          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+          echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
+          cat android/local.properties
 
-          # ── Restore custom native code ──────────────────────────────────
-          cp -r android_custom/* android/
-
-          # ── Print build files for diagnosis ─────────────────────────────
-          echo "=== build.gradle ==="
-          cat android/app/build.gradle 2>/dev/null || echo "no build.gradle"
-          echo "=== build.gradle.kts ==="
-          cat android/app/build.gradle.kts 2>/dev/null || echo "no build.gradle.kts"
-
-          # ── Update minSdk + compileSdk (handle both Groovy and Kotlin DSL) ──
-          if [ -f "android/app/build.gradle.kts" ]; then
-            GRADLE_FILE="android/app/build.gradle.kts"
-            # 1. Handle flutter reference style (robust spacing)
-            sed -i 's/minSdk[ \t]*=[ \t]*flutter\.minSdkVersion/minSdk = 21/g' "$GRADLE_FILE"
-            sed -i 's/compileSdk[ \t]*=[ \t]*flutter\.compileSdkVersion/compileSdk = 36/g' "$GRADLE_FILE"
-            # 2. Replace any numeric values (requires at least one digit)
-            sed -i 's/minSdk[ \t]*=[ \t]*[0-9][0-9]*/minSdk = 21/g' "$GRADLE_FILE"
-            sed -i 's/compileSdk[ \t]*=[ \t]*[0-9][0-9]*/compileSdk = 36/g' "$GRADLE_FILE"
-          fi
-          if [ -f "android/app/build.gradle" ]; then
-            GRADLE_FILE="android/app/build.gradle"
-            # 1. Handle flutter reference style
-            sed -i 's/minSdkVersion[ \t]*flutter\.minSdkVersion/minSdkVersion 21/g' "$GRADLE_FILE"
-            sed -i 's/compileSdkVersion[ \t]*flutter\.compileSdkVersion/compileSdkVersion 36/g' "$GRADLE_FILE"
-            # 2. Handle numeric values
-            sed -i 's/minSdkVersion[ \t]*[0-9][0-9]*/minSdkVersion 21/g' "$GRADLE_FILE"
-            sed -i 's/compileSdkVersion[ \t]*[0-9][0-9]*/compileSdkVersion 36/g' "$GRADLE_FILE"
-          fi
-
-          # ── Add OkHttp + Coroutines dependencies to app build file ──────
-          if [ -f "android/app/build.gradle.kts" ]; then
-            GRADLE_FILE="android/app/build.gradle.kts"
-            echo "dependencies {" >> "$GRADLE_FILE"
-            echo "    implementation(\"com.squareup.okhttp3:okhttp:4.12.0\")" >> "$GRADLE_FILE"
-            echo "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3\")" >> "$GRADLE_FILE"
-            echo "}" >> "$GRADLE_FILE"
-          fi
-          if [ -f "android/app/build.gradle" ]; then
-            GRADLE_FILE="android/app/build.gradle"
-            echo "dependencies {" >> "$GRADLE_FILE"
-            echo "    implementation 'com.squareup.okhttp3:okhttp:4.12.0'" >> "$GRADLE_FILE"
-            echo "    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'" >> "$GRADLE_FILE"
-            echo "}" >> "$GRADLE_FILE"
-          fi
-
-          echo "=== Updated gradle file ==="
-          cat android/app/build.gradle.kts 2>/dev/null || cat android/app/build.gradle 2>/dev/null
-
-      - name: Build APK (verbose)
+      - name: Build APK
         working-directory: ./cyber_intel_app
         run: |
-          if ! flutter build apk --release --verbose > build_log.txt 2>&1; then
+          if ! flutter build apk --release > build_log.txt 2>&1; then
             echo "======================================================"
-            echo "                   BUILD FAILED                       "
+            echo "                   BUILD FAILED"
             echo "======================================================"
-            echo "--- COMPILER ERRORS ---"
-            tail -n 150 build_log.txt | grep -v "org.gradle.internal"
+            tail -n 100 build_log.txt
             echo "======================================================"
             exit 1
           fi
