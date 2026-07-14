@@ -89,7 +89,19 @@ EOF
 
       - name: Build APK (verbose)
         working-directory: ./cyber_intel_app
-        run: flutter build apk --release --verbose
+        run: |
+          if ! flutter build apk --release --verbose > build_log.txt 2>&1; then
+            echo "Build failed! Committing error log to repository..."
+            tail -n 300 build_log.txt > ../ci_error.log
+            cd ..
+            git config --global user.name "GitHub Actions"
+            git config --global user.email "actions@github.com"
+            git add ci_error.log
+            git commit -m "chore: upload CI error log"
+            git pull --rebase
+            git push
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
