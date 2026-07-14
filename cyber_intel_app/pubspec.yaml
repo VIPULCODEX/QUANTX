@@ -15,6 +15,11 @@ dependencies:
   intl: ^0.18.1
   flutter_spinkit: ^5.2.0
   shared_preferences: ^2.2.2
+  # Security Dashboard plugins
+  network_info_plus: ^5.0.3       # Wi-Fi SSID and network info
+  device_info_plus: ^10.1.0       # Android version and device details
+  installed_apps: ^1.4.0          # List installed apps for audit
+  permission_handler: ^11.3.1     # Request runtime permissions cleanly
 
 dev_dependencies:
   flutter_test:

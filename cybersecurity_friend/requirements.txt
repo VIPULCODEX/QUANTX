@@ -1,44 +1,45 @@
-# QuantX – AI Assistant
+# QuantX - AI Assistant + PhishSense Security Scanner
 # Python dependencies
 # Install with: pip install -r requirements.txt
 
-# ─── LangChain Core ───────────────────────────────
+# --- LangChain Core ---
 langchain
 langchain-core
 langchain-community
 langchain-text-splitters
 
-# ─── LangChain Integrations ───────────────────────
-langchain-huggingface       # HuggingFace embeddings
-langchain-google-genai      # Google Gemini LLM
-langchain-groq              # Groq LLM
+# --- LangChain Integrations ---
+langchain-huggingface
+langchain-google-genai
+langchain-groq
 
-# ─── Embeddings & Vector Store ────────────────────
-sentence-transformers       # all-MiniLM-L6-v2 model
-faiss-cpu                   # FAISS (CPU only - no GPU needed)
+# --- Embeddings & Vector Store ---
+sentence-transformers
+faiss-cpu
 
-# ─── Google Gemini ────────────────────────────────
+# --- Google Gemini ---
 google-generativeai
 
-# ─── Document Loading ─────────────────────────────
-pypdf                       # PDF loading support
+# --- Document Loading ---
+pypdf
 
-# ─── News API ─────────────────────────────────────
-requests                    # HTTP calls to NewsAPI
+# --- HTTP & Env ---
+requests
+python-dotenv
 
-# ─── Environment Variables ────────────────────────
-python-dotenv               # Load .env file
-
-# ─── (Optional) For progress bars ────────────────
+# --- Utilities ---
 tqdm
 
-# ─── Streamlit UI ─────────────────────────────────
+# --- Streamlit UI ---
 streamlit
 
-# ─── FastAPI Backend ──────────────────────────────
-fastapi                     # Production API framework
-uvicorn[standard]           # ASGI server for FastAPI
-gunicorn                    # Multi-worker process manager (production)
+# --- FastAPI Backend ---
+fastapi
+uvicorn[standard]
+gunicorn
 
-# ─── (Optional) Load Testing ─────────────────────
-httpx                       # Async HTTP client for load_test.py
+# --- Async HTTP ---
+httpx
+
+# --- PhishSense ML (Scam/Phishing/URL Detector) ---
+scikit-learn==1.6.1

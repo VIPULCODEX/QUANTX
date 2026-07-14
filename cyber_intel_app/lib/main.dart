@@ -5,6 +5,8 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'api_service.dart';
 import 'widgets/neural_background.dart';
 import 'widgets/threat_monitor.dart';
+import 'scanner_service.dart';
+import 'security_dashboard.dart';
 
 void main() {
   runApp(
@@ -59,6 +61,48 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
+  bool _scannerEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ScannerService.isScannerEnabled().then((v) => setState(() => _scannerEnabled = v));
+  }
+
+  Future<void> _toggleScanner(bool val) async {
+    if (val) {
+      // Show permission guide before enabling
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF0F1923),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Enable Web Scanner', style: TextStyle(color: Color(0xFFFFC857), fontWeight: FontWeight.bold)),
+          content: const Text(
+            'QuantX needs Accessibility Permission to scan websites you visit.\n\n'
+            '1. Tap OK to open Android Accessibility Settings.\n'
+            '2. Tap "QuantX Web Scanner".\n'
+            '3. Toggle it ON.\n\n'
+            'Only URLs are analyzed. No browsing history is stored.',
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Colors.white38))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFC857), foregroundColor: Colors.black),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Open Settings'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await ScannerService.openAccessibilitySettings();
+      }
+    }
+    await ScannerService.setScannerEnabled(val);
+    setState(() => _scannerEnabled = val);
+  }
 
   void _sendMessage(BuildContext context) {
     if (_controller.text.trim().isEmpty) return;
@@ -248,6 +292,85 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
+
+                      // ── SCANNER TOGGLE ──────────────────────
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F1923),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _scannerEnabled
+                                ? const Color(0xFF4CAF50).withOpacity(0.6)
+                                : Colors.white12,
+                          ),
+                          boxShadow: _scannerEnabled
+                              ? [BoxShadow(color: const Color(0xFF4CAF50).withOpacity(0.12), blurRadius: 12, spreadRadius: 1)]
+                              : [],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: (_scannerEnabled ? const Color(0xFF4CAF50) : Colors.white24).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Icon(
+                                _scannerEnabled ? Icons.radar : Icons.radar_outlined,
+                                color: _scannerEnabled ? const Color(0xFF4CAF50) : Colors.white38,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'WEB SCANNER',
+                                    style: TextStyle(
+                                      color: _scannerEnabled ? const Color(0xFF4CAF50) : Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                  Text(
+                                    _scannerEnabled ? 'Scanning all browsers...' : 'Background URL scanning',
+                                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _scannerEnabled,
+                              onChanged: _toggleScanner,
+                              activeColor: const Color(0xFF4CAF50),
+                              inactiveThumbColor: Colors.white38,
+                              inactiveTrackColor: Colors.white12,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+                      // ── Security Dashboard nav tile ──────────
+                      _menuTile(
+                        context,
+                        icon: Icons.shield_outlined,
+                        iconColor: const Color(0xFFFFC857),
+                        title: 'Security Dashboard',
+                        subtitle: 'Phishing · Wi-Fi · Device · Apps',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => const SecurityDashboardScreen(),
+                          ));
+                        },
+                      ),
+                      const SizedBox(height: 8),
+
                       _menuTile(
                         context,
                         icon: Icons.history_edu,

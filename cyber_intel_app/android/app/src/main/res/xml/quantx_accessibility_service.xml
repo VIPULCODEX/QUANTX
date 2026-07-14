@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    QuantX Accessibility Service Configuration
+    This file tells Android what events to listen for.
+    We listen for window content changes and window state changes
+    so we can read the URL bar of browsers like Chrome/Firefox.
+-->
+<accessibility-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/accessibility_service_description"
+    android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged|typeViewTextChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRequestFilterKeyEvents|flagDefault"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="100"
+    android:settingsActivity=".MainActivity"
+    android:packageNames="com.android.chrome,org.mozilla.firefox,com.microsoft.emmx,com.opera.browser,com.sec.android.app.sbrowser,com.UCMobile.intl,com.brave.browser,com.duckduckgo.mobile.android" />

@@ -283,3 +283,159 @@ async def rag_status():
     if rag_instance is None:
         return {"pipeline_ready": False, "message": "RAG not initialized"}
     return rag_instance.get_index_status()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECURITY SCANNER ENDPOINTS (PhishSense + Android Telemetry)
+# ─────────────────────────────────────────────────────────────────────────────
+import pickle, os as _os
+
+_phish_model = None
+
+def _get_phish_model():
+    global _phish_model
+    if _phish_model is None:
+        model_path = _os.path.join(_os.path.dirname(__file__), "model", "model.pkl")
+        if _os.path.exists(model_path):
+            with open(model_path, "rb") as f:
+                artifacts = pickle.load(f)
+            _phish_model = artifacts["pipeline"]
+    return _phish_model
+
+
+class PhishRequest(BaseModel):
+    text: str
+
+
+class WifiRequest(BaseModel):
+    ssid: str
+    security_type: str          # e.g. "WPA2", "WPA3", "Open", "WEP"
+    is_public: Optional[bool] = False
+
+
+class DeviceRequest(BaseModel):
+    os_version: str
+    usb_debugging: bool
+    unknown_sources: bool
+    developer_mode: bool
+    screen_lock: bool
+    google_play_protect: bool
+
+
+class AppAuditRequest(BaseModel):
+    apps: list                  # List of {name, package, permissions: [...]}
+
+
+@app.post("/api/security/phishing")
+async def analyze_phishing(req: PhishRequest):
+    """
+    Run PhishSense ML + rule engine on arbitrary text/URL.
+    Returns raw ML output + an LLM-generated plain-English explanation.
+    """
+    try:
+        from inference import analyze_text
+        result = analyze_text(req.text, model=_get_phish_model())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PhishSense error: {e}")
+
+    # Build LLM explanation if assistant is ready
+    explanation = ""
+    if assistant_instance:
+        prompt = (
+            f"A user submitted the following text for phishing analysis:\n\n"
+            f"\"{req.text}\"\n\n"
+            f"The PhishSense ML model returned:\n"
+            f"- Prediction: {result['prediction']}\n"
+            f"- Risk Score: {result['risk_score']}%\n"
+            f"- Reasons: {', '.join(result['reasons'])}\n"
+            f"- URL Flag: {result['url_flag']}\n\n"
+            f"In 3-4 sentences, explain to the user in plain English what this means, "
+            f"whether they are at risk, and what they should do next."
+        )
+        try:
+            explanation = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: assistant_instance.get_llm_response(prompt)
+            )
+        except Exception:
+            explanation = "Could not generate AI explanation at this time."
+
+    return {**result, "ai_explanation": explanation}
+
+
+@app.post("/api/security/wifi")
+async def analyze_wifi(req: WifiRequest):
+    """Assess Wi-Fi network security using the LLM."""
+    if assistant_instance is None:
+        raise HTTPException(status_code=503, detail="AI not ready")
+
+    prompt = (
+        f"A user is connected to a Wi-Fi network with these details:\n"
+        f"- Network Name (SSID): {req.ssid}\n"
+        f"- Security Type: {req.security_type}\n"
+        f"- Is Public Hotspot: {req.is_public}\n\n"
+        f"As a cybersecurity expert, assess the risk level of this network. "
+        f"Reply in this exact format:\n"
+        f"Risk Level: [SAFE / LOW / MEDIUM / HIGH]\n"
+        f"Assessment: [2-3 sentences explaining the risk]\n"
+        f"Action: [One specific thing the user should do right now]"
+    )
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: assistant_instance.get_llm_response(prompt)
+    )
+    return {"ssid": req.ssid, "security_type": req.security_type, "analysis": result}
+
+
+@app.post("/api/security/device")
+async def analyze_device(req: DeviceRequest):
+    """Audit Android device security settings using the LLM."""
+    if assistant_instance is None:
+        raise HTTPException(status_code=503, detail="AI not ready")
+
+    issues = []
+    if req.usb_debugging:    issues.append("USB Debugging is ON")
+    if req.unknown_sources:  issues.append("Install from Unknown Sources is ON")
+    if req.developer_mode:   issues.append("Developer Mode is ON")
+    if not req.screen_lock:  issues.append("No Screen Lock set")
+    if not req.google_play_protect: issues.append("Google Play Protect is DISABLED")
+
+    prompt = (
+        f"Perform a security audit on this Android device:\n"
+        f"- OS Version: {req.os_version}\n"
+        f"- Security Issues Found: {', '.join(issues) if issues else 'None detected'}\n"
+        f"- Screen Lock: {'Enabled' if req.screen_lock else 'DISABLED'}\n"
+        f"- Google Play Protect: {'Enabled' if req.google_play_protect else 'DISABLED'}\n\n"
+        f"Respond in this format:\n"
+        f"Overall Security: [SECURE / AT RISK / CRITICAL]\n"
+        f"Issues:\n- [list each issue with a one-line explanation]\n"
+        f"Top Priority Fix: [the single most important thing to do first]"
+    )
+    analysis = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: assistant_instance.get_llm_response(prompt)
+    )
+    return {"issues_detected": issues, "issue_count": len(issues), "analysis": analysis}
+
+
+@app.post("/api/security/apps")
+async def audit_apps(req: AppAuditRequest):
+    """Flag suspicious installed apps based on name and permissions using the LLM."""
+    if assistant_instance is None:
+        raise HTTPException(status_code=503, detail="AI not ready")
+
+    app_summary = "\n".join([
+        f"- {a.get('name', 'Unknown')} ({a.get('package', '')}): permissions={a.get('permissions', [])}"
+        for a in req.apps[:40]   # cap at 40 to avoid token overflow
+    ])
+    prompt = (
+        f"Review this list of installed Android apps and their permissions. "
+        f"Flag any that seem suspicious (e.g. a flashlight app requesting microphone/location):\n\n"
+        f"{app_summary}\n\n"
+        f"Respond in this format:\n"
+        f"Suspicious Apps Found: [number]\n"
+        f"Flagged:\n- [App Name]: [reason why it's suspicious]\n"
+        f"Safe Apps: [count of apps that look normal]\n"
+        f"Recommendation: [one overall action for the user]"
+    )
+    analysis = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: assistant_instance.get_llm_response(prompt)
+    )
+    return {"total_apps_scanned": len(req.apps), "analysis": analysis}
