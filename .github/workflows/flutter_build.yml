@@ -49,19 +49,21 @@ jobs:
           # ── Update minSdk + compileSdk (handle both Groovy and Kotlin DSL) ──
           if [ -f "android/app/build.gradle.kts" ]; then
             GRADLE_FILE="android/app/build.gradle.kts"
-            # Replace the minSdk and compileSdk lines regardless of exact value used
-            sed -i 's/minSdk\s*=\s*[^$][0-9]*/minSdk = 21/g' "$GRADLE_FILE"
-            sed -i 's/compileSdk\s*=\s*[^$][0-9]*/compileSdk = 34/g' "$GRADLE_FILE"
-            # Also handle flutter reference style (robust spacing)
+            # 1. Handle flutter reference style (robust spacing)
             sed -i 's/minSdk[ \t]*=[ \t]*flutter\.minSdkVersion/minSdk = 21/g' "$GRADLE_FILE"
             sed -i 's/compileSdk[ \t]*=[ \t]*flutter\.compileSdkVersion/compileSdk = 34/g' "$GRADLE_FILE"
+            # 2. Replace any numeric values (requires at least one digit)
+            sed -i 's/minSdk[ \t]*=[ \t]*[0-9][0-9]*/minSdk = 21/g' "$GRADLE_FILE"
+            sed -i 's/compileSdk[ \t]*=[ \t]*[0-9][0-9]*/compileSdk = 34/g' "$GRADLE_FILE"
           fi
           if [ -f "android/app/build.gradle" ]; then
             GRADLE_FILE="android/app/build.gradle"
+            # 1. Handle flutter reference style
             sed -i 's/minSdkVersion[ \t]*flutter\.minSdkVersion/minSdkVersion 21/g' "$GRADLE_FILE"
             sed -i 's/compileSdkVersion[ \t]*flutter\.compileSdkVersion/compileSdkVersion 34/g' "$GRADLE_FILE"
-            sed -i 's/minSdkVersion[ \t]*[0-9]*/minSdkVersion 21/g' "$GRADLE_FILE"
-            sed -i 's/compileSdkVersion[ \t]*[0-9]*/compileSdkVersion 34/g' "$GRADLE_FILE"
+            # 2. Handle numeric values
+            sed -i 's/minSdkVersion[ \t]*[0-9][0-9]*/minSdkVersion 21/g' "$GRADLE_FILE"
+            sed -i 's/compileSdkVersion[ \t]*[0-9][0-9]*/compileSdkVersion 34/g' "$GRADLE_FILE"
           fi
 
           # ── Add OkHttp + Coroutines dependencies to app build file ──────
