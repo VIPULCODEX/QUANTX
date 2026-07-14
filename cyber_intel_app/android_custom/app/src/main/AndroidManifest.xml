@@ -20,7 +20,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
     <!-- ── Accessibility Service (for background URL scanning) ── -->
-    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"/>
 
     <application
         android:label="QuantX AI"

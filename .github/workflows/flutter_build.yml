@@ -93,8 +93,7 @@ jobs:
             echo "                   BUILD FAILED                       "
             echo "======================================================"
             echo "--- COMPILER ERRORS ---"
-            grep -i -B 2 -A 5 "e: " build_log.txt || true
-            grep -i -B 2 -A 5 "error:" build_log.txt || true
+            tail -n 150 build_log.txt | grep -v "org.gradle.internal"
             echo "======================================================"
             exit 1
           fi
