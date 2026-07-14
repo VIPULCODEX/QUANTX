@@ -59,11 +59,8 @@ QUEUE_TIMEOUT_S = 30.0
 # Populated at startup
 _llm_semaphore: Optional[asyncio.Semaphore] = None
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Pipeline Singletons
-# ─────────────────────────────────────────────────────────────────────────────
-assistant_instance: Optional[CybersecurityAssistant] = None
-rag_instance: Optional[RAGPipeline] = None
+# Tracks whether background init is done
+_init_status = {"ready": False, "error": None, "progress": "Not started"}
 
 # Metrics counters (per-process; reset on restart)
 _metrics = {
@@ -77,32 +74,64 @@ _metrics = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Background initializer — runs in a thread so server starts INSTANTLY
+# ─────────────────────────────────────────────────────────────────────────────
+def _background_init():
+    """Load RAG pipeline + assistant in a worker thread.
+    The server is already accepting requests while this runs.
+    Health check returns 'initializing' until this completes.
+    """
+    global assistant_instance, rag_instance
+    try:
+        _init_status["progress"] = "Loading embedding model..."
+        logger.info("[BG] Starting background RAG initialization...")
+
+        rag = RAGPipeline()
+        _init_status["progress"] = "Initializing FAISS indices..."
+        rag.initialize()
+
+        _init_status["progress"] = "Building assistant..."
+        retriever = rag.get_retriever(k=TOP_K)
+        assistant = CybersecurityAssistant(retriever, max_tokens=LLM_MAX_TOKENS)
+
+        # Assign atomically so no half-initialized state is visible
+        rag_instance = rag
+        assistant_instance = assistant
+
+        _init_status["ready"] = True
+        _init_status["progress"] = "Ready"
+        logger.info("[BG] QuantX Neural Core ready!")
+    except Exception:
+        import traceback
+        err = traceback.format_exc()
+        _init_status["error"] = err
+        _init_status["progress"] = "Failed"
+        logger.error("[BG] Init failed:\n%s", err)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Lifespan (startup / shutdown)
 # ─────────────────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global assistant_instance, rag_instance, _llm_semaphore
+    global _llm_semaphore
 
-    # Create the semaphore inside the running event loop
+    # Semaphore must be created inside the running event loop
     _llm_semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)
 
     if not GROQ_API_KEY:
-        logger.error("GROQ_API_KEY is not set.")
+        logger.error("GROQ_API_KEY is not set — chat will fail.")
 
-    try:
-        logger.info("Initializing QuantX Neural Core (v3)...")
-        rag_instance = RAGPipeline()
-        rag_instance.initialize()
-        retriever = rag_instance.get_retriever(k=TOP_K)
-        assistant_instance = CybersecurityAssistant(retriever, max_tokens=LLM_MAX_TOKENS)
-        logger.info("Backend v3 ready. Semaphore slots: %d", MAX_CONCURRENT_LLM_CALLS)
-    except Exception as e:
-        import traceback
-        logger.error("Critical init error during lifespan startup:")
-        logger.error(traceback.format_exc())
-        assistant_instance = None
+    # ── Launch RAG init in a background thread so server starts INSTANTLY ──
+    # HF Spaces health check hits /api/health immediately after gunicorn starts.
+    # Without this, the blocking model load causes the health check to time out.
+    import threading
+    _init_status["progress"] = "Starting background loader..."
+    t = threading.Thread(target=_background_init, daemon=True, name="QuantX-Init")
+    t.start()
+    logger.info("Server UP immediately. RAG pipeline loading in background thread...")
 
-    yield  # ← app is alive here
+    yield  # ← server is fully alive and accepting requests here
 
     cache_manager.clear()
     logger.info("Shutdown complete.")
@@ -235,15 +264,19 @@ async def handle_chat(request: ChatRequest, client_request: Request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GET /api/health
+# GET /api/health  — Always returns 200 so HF Spaces health check passes
 # ─────────────────────────────────────────────────────────────────────────────
 @app.get("/api/health")
 async def health_check():
+    # Always HTTP 200 — HF Spaces uses this for health check.
+    # pipeline_ready=False means still loading, not broken.
     return {
-        "status": "online",
-        "version": "3.0.0",
+        "status": "initializing" if not _init_status["ready"] else "online",
+        "version": "3.1.0",
         "keys_loaded": bool(GROQ_API_KEY),
         "pipeline_ready": assistant_instance is not None,
+        "init_progress": _init_status["progress"],
+        "init_error": _init_status.get("error"),
         "llm_slots_available": _llm_semaphore._value if _llm_semaphore else 0,
         "llm_slots_total": MAX_CONCURRENT_LLM_CALLS,
     }
