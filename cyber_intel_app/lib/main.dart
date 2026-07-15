@@ -5,7 +5,6 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'api_service.dart';
 import 'widgets/neural_background.dart';
 import 'widgets/threat_monitor.dart';
-import 'scanner_service.dart';
 import 'security_dashboard.dart';
 
 void main() {
@@ -61,192 +60,13 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
-  bool _scannerEnabled = false;
 
   @override
   void initState() {
     super.initState();
-    ScannerService.isScannerEnabled().then((v) => setState(() => _scannerEnabled = v));
   }
 
-  Future<void> _toggleScanner(bool val) async {
-    if (val) {
-      // Show full step-by-step guide dialog
-      final action = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF0B0F14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFFFFC857), width: 1),
-          ),
-          title: Row(
-            children: const [
-              Icon(Icons.radar, color: Color(0xFFFFC857), size: 22),
-              SizedBox(width: 10),
-              Text('Enable Web Scanner',
-                  style: TextStyle(
-                      color: Color(0xFFFFC857),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'QuantX needs Accessibility Permission to scan websites in real-time.',
-                style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
-              ),
-              const SizedBox(height: 16),
-              // Step-by-step visual guide
-              _stepTile('1', 'Tap "Open Settings" below', const Color(0xFFFFC857)),
-              _stepTile('2', 'Find "Installed services" or "Downloaded apps"', const Color(0xFF4CAF50)),
-              _stepTile('3', 'Tap "QuantX Web Scanner"', const Color(0xFF4CAF50)),
-              _stepTile('4', 'Toggle the switch ON', const Color(0xFF4CAF50)),
-              _stepTile('5', 'Tap Allow in the confirmation popup', const Color(0xFF4CAF50)),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: const Text(
-                  '🔒 Only the current URL is analyzed.\nNo browsing history is stored or shared.',
-                  style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.5),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'cancel'),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white38)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'manual'),
-              child: const Text("Can't open?",
-                  style: TextStyle(color: Colors.white54, fontSize: 12)),
-            ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFC857),
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-              icon: const Icon(Icons.settings_accessibility, size: 16),
-              label: const Text('Open Settings',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () => Navigator.pop(ctx, 'open'),
-            ),
-          ],
-        ),
-      );
 
-      if (action == 'open') {
-        // Show SnackBar so user knows it was triggered
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Opening Accessibility Settings...\nFind "QuantX Web Scanner" and enable it.',
-              ),
-              duration: Duration(seconds: 4),
-              backgroundColor: Color(0xFF0F1923),
-            ),
-          );
-        }
-        await ScannerService.openAccessibilitySettings();
-
-      } else if (action == 'manual') {
-        // Show manual path dialog
-        if (mounted) {
-          await showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              backgroundColor: const Color(0xFF0B0F14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: Colors.white24)),
-              title: const Text('Manual Steps',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Go to your phone\'s:\n\n'
-                    '⚙️ Settings\n'
-                    '   → Accessibility\n'
-                    '      → Installed services\n'
-                    '         → QuantX Web Scanner\n'
-                    '            → Toggle ON\n\n'
-                    'On Samsung:\n'
-                    '⚙️ Settings → Accessibility\n'
-                    '   → Interaction and dexterity\n'
-                    '      → QuantX Web Scanner\n\n'
-                    'On Xiaomi/MIUI:\n'
-                    '⚙️ Settings → Additional settings\n'
-                    '   → Accessibility → QuantX Web Scanner',
-                    style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.6),
-                  ),
-                ],
-              ),
-              actions: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4CAF50),
-                      foregroundColor: Colors.black),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Got It'),
-                ),
-              ],
-            ),
-          );
-        }
-        return; // Don't toggle ON if user is still reading manual steps
-      } else {
-        return; // Cancelled
-      }
-    }
-    await ScannerService.setScannerEnabled(val);
-    setState(() => _scannerEnabled = val);
-  }
-
-  /// Helper widget for step tiles in the permission dialog
-  Widget _stepTile(String number, String text, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 22, height: 22,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(0.6)),
-            ),
-            child: Text(number,
-                style: TextStyle(
-                    color: color, fontSize: 11, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text,
-                style: const TextStyle(
-                    color: Colors.white70, fontSize: 12, height: 1.4)),
-          ),
-        ],
-      ),
-    );
-  }
 
 
   void _sendMessage(BuildContext context) {
@@ -438,66 +258,6 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ── SCANNER TOGGLE ──────────────────────
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F1923),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _scannerEnabled
-                                ? const Color(0xFF4CAF50).withOpacity(0.6)
-                                : Colors.white12,
-                          ),
-                          boxShadow: _scannerEnabled
-                              ? [BoxShadow(color: const Color(0xFF4CAF50).withOpacity(0.12), blurRadius: 12, spreadRadius: 1)]
-                              : [],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: (_scannerEnabled ? const Color(0xFF4CAF50) : Colors.white24).withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Icon(
-                                _scannerEnabled ? Icons.radar : Icons.radar_outlined,
-                                color: _scannerEnabled ? const Color(0xFF4CAF50) : Colors.white38,
-                                size: 18,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'WEB SCANNER',
-                                    style: TextStyle(
-                                      color: _scannerEnabled ? const Color(0xFF4CAF50) : Colors.white,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 1,
-                                    ),
-                                  ),
-                                  Text(
-                                    _scannerEnabled ? 'Scanning all browsers...' : 'Background URL scanning',
-                                    style: const TextStyle(color: Colors.white38, fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Switch(
-                              value: _scannerEnabled,
-                              onChanged: _toggleScanner,
-                              activeColor: const Color(0xFF4CAF50),
-                              inactiveThumbColor: Colors.white38,
-                              inactiveTrackColor: Colors.white12,
-                            ),
-                          ],
-                        ),
-                      ),
 
                       const SizedBox(height: 8),
                       // ── Security Dashboard nav tile ──────────

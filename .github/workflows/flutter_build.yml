@@ -30,12 +30,24 @@ jobs:
         working-directory: ./cyber_intel_app
         run: flutter pub get
 
-      - name: Write local.properties
+      - name: Regenerate Android folder
         working-directory: ./cyber_intel_app
         run: |
-          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+          # Remove android folder and let Flutter regenerate it cleanly
+          # This produces correct build.gradle.kts, settings.gradle.kts, gradlew etc.
+          rm -rf android
+          flutter create . --platforms android --org com.quantx
+
+          # Write SDK paths into local.properties
+          echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
-          cat android/local.properties
+
+          # Replace the generated AndroidManifest with our custom one
+          cp android_src/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          cp android_src/strings.xml android/app/src/main/res/values/strings.xml
+
+          echo "=== AndroidManifest ==="
+          cat android/app/src/main/AndroidManifest.xml
 
       - name: Build APK
         working-directory: ./cyber_intel_app
@@ -44,10 +56,11 @@ jobs:
             echo "======================================================"
             echo "                   BUILD FAILED"
             echo "======================================================"
-            tail -n 100 build_log.txt
+            tail -n 80 build_log.txt
             echo "======================================================"
             exit 1
           fi
+          echo "BUILD SUCCEEDED"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

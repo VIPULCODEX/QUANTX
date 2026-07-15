@@ -1,25 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.quantx.cyber_intel_app">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- ── Core Internet permissions ── -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-
-    <!-- ── Wi-Fi scanning (requires Location permission on Android 10+) ── -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-
-    <!-- ── Installed app auditing ── -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
-
-    <!-- ── Notifications (for scanner alerts) ── -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-
-    <!-- ── Accessibility Service (for background URL scanning) ── -->
 
     <application
         android:label="QuantX AI"
@@ -28,7 +16,6 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="true">
 
-        <!-- Main Flutter Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -46,33 +33,9 @@
             </intent-filter>
         </activity>
 
-        <!-- Flutter metadata -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
-
-        <!-- QuantX Accessibility Service (URL scanner) -->
-        <service
-            android:name=".QuantXScannerService"
-            android:exported="true"
-            android:label="QuantX Web Scanner"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService"/>
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/quantx_accessibility_service"/>
-        </service>
-
-        <!-- Boot receiver to persist scanner state -->
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-            </intent-filter>
-        </receiver>
 
     </application>
 </manifest>
