@@ -1,19 +1,31 @@
 import os, sys
 
-for fname in ['android/build.gradle', 'android/build.gradle.kts']:
-    if os.path.exists(fname):
-        block = (
-            '\nsubprojects {\n'
-            '    afterEvaluate { project ->\n'
-            '        if (project.hasProperty("android")) {\n'
-            '            project.android.compileSdkVersion 36\n'
-            '        }\n'
-            '    }\n'
-            '}\n'
-        )
-        with open(fname, 'a') as f:
-            f.write(block)
-        print('Patched ' + fname + ' with compileSdk 36 override')
-        sys.exit(0)
+groovy_block = """
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android.compileSdkVersion 36
+        }
+    }
+}
+"""
 
-print('No root build.gradle found - skipping patch')
+kotlin_block = """
+subprojects {
+    afterEvaluate {
+        (extensions.findByName("android") as? com.android.build.gradle.BaseExtension)
+            ?.compileSdkVersion(36)
+    }
+}
+"""
+
+if os.path.exists('android/build.gradle'):
+    with open('android/build.gradle', 'a') as f:
+        f.write(groovy_block)
+    print('Patched android/build.gradle (Groovy)')
+elif os.path.exists('android/build.gradle.kts'):
+    with open('android/build.gradle.kts', 'a') as f:
+        f.write(kotlin_block)
+    print('Patched android/build.gradle.kts (Kotlin DSL)')
+else:
+    print('No root build file found - skipping patch')
