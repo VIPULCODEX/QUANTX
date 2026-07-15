@@ -18,7 +18,6 @@ dependencies:
   # Security Dashboard plugins
   network_info_plus: ^6.0.0       # Wi-Fi SSID and network info (compileSdk 34 compatible)
   device_info_plus: ^11.1.1       # Android version and device details (compileSdk 34 compatible)
-  installed_apps: ^1.4.0          # List installed apps for audit
   permission_handler: ^11.3.1     # Request runtime permissions cleanly
 
 dev_dependencies:
