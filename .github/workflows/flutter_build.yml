@@ -52,6 +52,22 @@ jobs:
           echo "=== AndroidManifest ==="
           cat android/app/src/main/AndroidManifest.xml
 
+          # Force all Flutter plugins to compile against SDK 36
+          # This prevents "plugin compiled against android-33" errors
+          ROOT_GRADLE="android/build.gradle"
+          if [ -f "$ROOT_GRADLE" ]; then
+            cat >> "$ROOT_GRADLE" << 'GRADLE_EOF'
+
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android.compileSdkVersion 36
+        }
+    }
+}
+GRADLE_EOF
+          fi
+
       - name: Build APK
         working-directory: ./cyber_intel_app
         run: |
