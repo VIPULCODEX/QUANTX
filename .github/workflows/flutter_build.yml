@@ -33,40 +33,29 @@ jobs:
       - name: Regenerate Android folder
         working-directory: ./cyber_intel_app
         run: |
-          # Remove android folder and let Flutter regenerate it cleanly
-          # This produces correct build.gradle.kts, settings.gradle.kts, gradlew etc.
           rm -rf android
-          # Pipe 'yes' to bypass any interactive confirmation prompts
           yes | flutter create . --platforms android --org com.quantx || true
-          # Ensure the android directory was created
           ls android/gradlew || { echo "ERROR: gradlew not generated"; exit 1; }
-
-          # Write SDK paths into local.properties
           echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
-
-          # Replace the generated AndroidManifest with our custom one
           cp android_src/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           cp android_src/strings.xml android/app/src/main/res/values/strings.xml
-
-          echo "=== AndroidManifest ==="
-          cat android/app/src/main/AndroidManifest.xml
-
-          # Force all Flutter plugins to compile against SDK 36
-          # This prevents "plugin compiled against android-33" errors
-          ROOT_GRADLE="android/build.gradle"
-          if [ -f "$ROOT_GRADLE" ]; then
-            cat >> "$ROOT_GRADLE" << 'GRADLE_EOF'
-
-subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            project.android.compileSdkVersion 36
-        }
-    }
-}
-GRADLE_EOF
-          fi
+          python3 -c "
+import os
+# Find root build file (Groovy or Kotlin DSL)
+for fname in ['android/build.gradle', 'android/build.gradle.kts']:
+    if os.path.exists(fname):
+        with open(fname, 'a') as f:
+            f.write('\nsubprojects {\n')
+            f.write('    afterEvaluate { project ->\n')
+            f.write('        if (project.hasProperty(\"android\")) {\n')
+            f.write('            project.android.compileSdkVersion 36\n')
+            f.write('        }\n')
+            f.write('    }\n')
+            f.write('}\n')
+        print(f'Patched {fname} with compileSdk 36 override')
+        break
+"
 
       - name: Build APK
         working-directory: ./cyber_intel_app
