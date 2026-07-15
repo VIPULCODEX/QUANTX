@@ -35,40 +35,20 @@ jobs:
         run: |
           rm -rf android
           yes | flutter create . --platforms android --org com.quantx || true
-          ls android/gradlew || { echo "ERROR: gradlew not generated"; exit 1; }
+          ls android/gradlew || exit 1
           echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
           cp android_src/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           cp android_src/strings.xml android/app/src/main/res/values/strings.xml
-          python3 -c "
-import os
-# Find root build file (Groovy or Kotlin DSL)
-for fname in ['android/build.gradle', 'android/build.gradle.kts']:
-    if os.path.exists(fname):
-        with open(fname, 'a') as f:
-            f.write('\nsubprojects {\n')
-            f.write('    afterEvaluate { project ->\n')
-            f.write('        if (project.hasProperty(\"android\")) {\n')
-            f.write('            project.android.compileSdkVersion 36\n')
-            f.write('        }\n')
-            f.write('    }\n')
-            f.write('}\n')
-        print(f'Patched {fname} with compileSdk 36 override')
-        break
-"
+          python3 patch_gradle.py
 
       - name: Build APK
         working-directory: ./cyber_intel_app
         run: |
           if ! flutter build apk --release > build_log.txt 2>&1; then
-            echo "======================================================"
-            echo "                   BUILD FAILED"
-            echo "======================================================"
             tail -n 80 build_log.txt
-            echo "======================================================"
             exit 1
           fi
-          echo "BUILD SUCCEEDED"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
