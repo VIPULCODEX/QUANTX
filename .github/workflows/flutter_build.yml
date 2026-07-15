@@ -36,7 +36,10 @@ jobs:
           # Remove android folder and let Flutter regenerate it cleanly
           # This produces correct build.gradle.kts, settings.gradle.kts, gradlew etc.
           rm -rf android
-          flutter create . --platforms android --org com.quantx
+          # Pipe 'yes' to bypass any interactive confirmation prompts
+          yes | flutter create . --platforms android --org com.quantx || true
+          # Ensure the android directory was created
+          ls android/gradlew || { echo "ERROR: gradlew not generated"; exit 1; }
 
           # Write SDK paths into local.properties
           echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
