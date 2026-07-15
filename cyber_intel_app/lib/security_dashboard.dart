@@ -6,7 +6,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:installed_apps/app_info.dart';
 import 'api_service.dart';
-import 'scanner_service.dart';
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SecurityDashboardScreen
