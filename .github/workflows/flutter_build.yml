@@ -40,7 +40,6 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
           cp android_src/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           cp android_src/strings.xml android/app/src/main/res/values/strings.xml
-          python3 patch_gradle.py
 
       - name: Build APK
         working-directory: ./cyber_intel_app
