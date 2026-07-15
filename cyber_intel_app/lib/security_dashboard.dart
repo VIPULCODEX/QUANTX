@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:installed_apps/installed_apps.dart';
-import 'package:installed_apps/app_info.dart';
 import 'api_service.dart';
 
 
