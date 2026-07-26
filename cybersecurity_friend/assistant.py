@@ -11,7 +11,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 from news_module import fetch_cybersecurity_news, format_articles_for_llm
-from news_module import fetch_cybersecurity_news, format_articles_for_llm
 from config import (
     NEWS_TRIGGER_WORDS, LLM_MAX_TOKENS, LLM_MODEL, LLM_TEMPERATURE, GROQ_API_KEY_LIST
 )

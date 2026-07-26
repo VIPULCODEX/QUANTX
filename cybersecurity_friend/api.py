@@ -30,7 +30,7 @@ from pydantic import BaseModel
 
 from rag_pipeline import RAGPipeline
 from assistant import CybersecurityAssistant
-from config import TOP_K, GROQ_API_KEY, LLM_MAX_TOKENS
+from config import TOP_K, GROQ_API_KEY, GROQ_API_KEY_LIST, LLM_MAX_TOKENS
 from security import validate_query, rate_limiter, get_client_id
 from cache_manager import cache_manager
 
@@ -47,8 +47,6 @@ logger.setLevel(logging.INFO)
 # ─────────────────────────────────────────────────────────────────────────────
 # Concurrency Controls (Scaled dynamically based on multi-key pool size)
 # ─────────────────────────────────────────────────────────────────────────────
-from config import TOP_K, GROQ_API_KEY, GROQ_API_KEY_LIST, LLM_MAX_TOKENS
-
 # Groq free tier ≈ 30 req/min => We assign 10 concurrent slots per API key.
 # If you provide 4 keys, local queue handles up to 40 seamless concurrent requests.
 MAX_CONCURRENT_LLM_CALLS = int(10 * max(1, len(GROQ_API_KEY_LIST)))
@@ -58,6 +56,12 @@ QUEUE_TIMEOUT_S = 30.0
 
 # Populated at startup
 _llm_semaphore: Optional[asyncio.Semaphore] = None
+
+# Populated by the background init thread. Must exist at module scope from the
+# start — otherwise any request arriving before _background_init's first
+# assignment hits a NameError instead of the intended "still initializing" path.
+assistant_instance: Optional[CybersecurityAssistant] = None
+rag_instance: Optional[RAGPipeline] = None
 
 # Tracks whether background init is done
 _init_status = {"ready": False, "error": None, "progress": "Not started"}
@@ -205,7 +209,10 @@ async def handle_chat(request: ChatRequest, client_request: Request):
         )
 
     # 2. Input Validation
-    clean_query = validate_query(request.query)
+    try:
+        clean_query = validate_query(request.query)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # 3. Cache fast-path (no semaphore needed)
     # We include `use_rag` toggle in the cache key to prevent mismatched caching
