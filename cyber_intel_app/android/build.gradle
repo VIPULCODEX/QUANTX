@@ -1,3 +1,5 @@
+// Repositories only. Plugin versions are declared in settings.gradle's
+// plugins block, so no buildscript{} classpath belongs here.
 allprojects {
     repositories {
         google()
@@ -6,10 +8,9 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-subprojects {
     project.evaluationDependsOn(":app")
 }
 

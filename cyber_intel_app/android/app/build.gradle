@@ -1,56 +1,58 @@
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader ->
-        localProperties.load(reader)
-    }
+// Plugin IDs are declared in settings.gradle. The Flutter plugin MUST be
+// applied after the Android and Kotlin plugins.
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "dev.flutter.flutter-gradle-plugin"
 }
-
-def flutterRoot = localProperties.getProperty('flutter.sdk')
-if (flutterRoot == null) {
-    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
-}
-
-apply plugin: 'com.android.application'
-apply plugin: 'org.jetbrains.kotlin.android'
-apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
-    namespace "com.quantx.cyber_intel_app"
-    compileSdkVersion 36
-    ndkVersion "27.3.13750724"
+    namespace = "com.quantx.cyber_intel_app"
+
+    // Track the Flutter SDK that CI installs instead of pinning numbers by
+    // hand. A hard-coded compileSdk is what kept drifting out of sync with the
+    // plugins (device_info_plus, network_info_plus, permission_handler), since
+    // their `^` version ranges resolve to whatever is current at build time.
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
     defaultConfig {
-        applicationId "com.quantx.cyber_intel_app"
-        minSdkVersion 21
-        targetSdkVersion 36
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        applicationId = "com.quantx.cyber_intel_app"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            // Debug-signed so `flutter build apk --release` yields an
+            // installable APK in CI with no keystore. Swap in a real
+            // signingConfig before any Play Store submission.
+            signingConfig = signingConfigs.debug
+            minifyEnabled = false
+            shrinkResources = false
         }
     }
 }
 
 flutter {
-    source '../..'
+    source = "../.."
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0"
+    // kotlin-stdlib is supplied by the Kotlin plugin; declaring it by hand
+    // risks a version clash with the plugin's own.
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
     implementation "com.squareup.okhttp3:okhttp:4.12.0"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
     implementation "androidx.core:core-ktx:1.13.1"
 }

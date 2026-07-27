@@ -12,13 +12,14 @@ dependencies:
   http: ^1.1.0
   provider: ^6.0.5
   google_fonts: ^6.1.0
-  intl: ^0.18.1
   flutter_spinkit: ^5.2.0
   shared_preferences: ^2.2.2
   # Security Dashboard plugins
-  network_info_plus: ^6.0.0       # Wi-Fi SSID and network info (compileSdk 34 compatible)
-  device_info_plus: ^11.1.1       # Android version and device details (compileSdk 34 compatible)
-  permission_handler: ^11.3.1     # Request runtime permissions cleanly
+  network_info_plus: ^6.0.0       # Wi-Fi SSID and network info
+  device_info_plus: ^11.1.1       # Android version and device details
+  permission_handler: ^11.3.1     # runtime permissions for the Wi-Fi/device scans
+  # NOTE: `intl` was removed — nothing imported it, and its version is a common
+  # pub-resolution conflict once flutter_localizations enters the graph.
 
 dev_dependencies:
   flutter_test:
