@@ -498,6 +498,10 @@ from findings import (                                          # noqa: E402
 
 _SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 
+# A batch may carry up to 100 findings, but only the most severe few are worth
+# an LLM call. Without this cap one request could fan out to 100 Groq calls.
+MAX_AI_ENRICHMENT = 8
+
 
 class FindingsRequest(BaseModel):
     findings: list
@@ -526,17 +530,45 @@ def _build_advice_prompt(code: str, severity: str, facets: dict) -> str:
     )
 
 
+async def _llm_with_semaphore(prompt: str) -> str:
+    """Run an LLM call under the same concurrency cap as /api/chat.
+
+    Without this the findings endpoint bypasses the Groq semaphore entirely and
+    can push total in-flight calls past the free-tier limit.
+    """
+    await asyncio.wait_for(_llm_semaphore.acquire(), timeout=QUEUE_TIMEOUT_S)
+    try:
+        return await asyncio.get_event_loop().run_in_executor(
+            None, lambda: assistant_instance.get_llm_response(prompt)
+        )
+    finally:
+        _llm_semaphore.release()
+
+
 @app.post("/api/security/findings")
-async def analyze_findings(req: FindingsRequest):
+async def analyze_findings(req: FindingsRequest, client_request: Request):
     """Turn on-device finding codes into remediation guidance.
 
     Offline playbooks are returned unconditionally, so the endpoint stays useful
     when the LLM is cold, rate-limited, or unavailable.
     """
+    client_id = get_client_id(client_request)
+    if not rate_limiter.is_allowed(client_id):
+        _metrics["rate_limited"] += 1
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Wait and retry.",
+            headers={"Retry-After": "60"},
+        )
+
     try:
         accepted, rejected = sanitize_batch(req.findings)
     except GateError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Spend the AI budget on the most severe findings, not on arrival order.
+    accepted.sort(key=lambda f: _SEVERITY_RANK.get(f.severity.value, 9))
+    ai_budget = MAX_AI_ENRICHMENT if req.want_ai else 0
 
     results = []
     for finding in accepted:
@@ -563,19 +595,22 @@ async def analyze_findings(req: FindingsRequest):
             cache_key = f"finding::{finding.cache_key()}"
             cached = await cache_manager.aget(cache_key)
             if cached:
+                # Cache hits are free — they don't consume the AI budget.
                 _metrics["cache_hits"] += 1
                 entry["ai"] = cached
-            else:
+            elif ai_budget > 0:
+                ai_budget -= 1
                 prompt = _build_advice_prompt(
                     finding.code, finding.severity.value, finding.facets
                 )
                 try:
                     _metrics["llm_calls"] += 1
-                    advice = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda p=prompt: assistant_instance.get_llm_response(p)
-                    )
+                    advice = await _llm_with_semaphore(prompt)
                     await cache_manager.aset(cache_key, advice)
                     entry["ai"] = advice
+                except asyncio.TimeoutError:
+                    _metrics["queue_timeouts"] += 1
+                    logger.warning("LLM queue timeout for %s", finding.code)
                 except Exception as e:
                     _metrics["errors"] += 1
                     logger.error("Advice generation failed for %s: %s", finding.code, e)
@@ -583,7 +618,6 @@ async def analyze_findings(req: FindingsRequest):
 
         results.append(entry)
 
-    results.sort(key=lambda r: _SEVERITY_RANK.get(r["sev"], 9))
     worst = results[0]["sev"] if results else "none"
 
     return {
@@ -591,6 +625,7 @@ async def analyze_findings(req: FindingsRequest):
         "rejected": len(rejected),
         "rejection_reasons": rejected[:10],
         "worst_severity": worst,
+        "ai_enriched": sum(1 for r in results if r["ai"]),
         "findings": results,
     }
 
