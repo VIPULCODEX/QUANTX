@@ -479,3 +479,124 @@ async def audit_apps(req: AppAuditRequest):
         None, lambda: assistant_instance.get_llm_response(prompt)
     )
     return {"total_apps_scanned": len(req.apps), "analysis": analysis}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FINDINGS ENDPOINT — privacy-preserving device advisory
+# ─────────────────────────────────────────────────────────────────────────────
+# Unlike the endpoints above, this one never receives device data. The client
+# detects locally and submits canonical finding codes; everything sent onward to
+# the LLM is built from the server-side registry, never from client input.
+from findings import (                                          # noqa: E402
+    GateError,
+    REGISTRY,
+    assert_no_leak,
+    offline_advice,
+    registry_summary,
+    sanitize_batch,
+)
+
+_SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+
+
+class FindingsRequest(BaseModel):
+    findings: list
+    want_ai: Optional[bool] = True
+
+
+def _build_advice_prompt(code: str, severity: str, facets: dict) -> str:
+    """Construct the LLM prompt from REGISTRY data only.
+
+    Note every value interpolated below originates server-side: `title` comes
+    from the registry, `severity` from the registry, and `facets` have already
+    passed the gate (closed-set values only). No client string reaches the LLM.
+    """
+    spec = REGISTRY[code]
+    facet_text = ", ".join(f"{k}={v}" for k, v in sorted(facets.items())) or "none"
+    return (
+        f"An on-device security scan raised this finding:\n\n"
+        f"Finding: {spec.title}\n"
+        f"Severity: {severity}\n"
+        f"Context: {facet_text}\n\n"
+        f"You do not have access to the user's device or any of its data, and you "
+        f"must not ask for any. Using only the finding above, reply in this format:\n"
+        f"What this means: [2 sentences in plain language]\n"
+        f"Do this now:\n- [step 1]\n- [step 2]\n- [step 3]\n"
+        f"Urgency: [immediate / soon / when convenient]"
+    )
+
+
+@app.post("/api/security/findings")
+async def analyze_findings(req: FindingsRequest):
+    """Turn on-device finding codes into remediation guidance.
+
+    Offline playbooks are returned unconditionally, so the endpoint stays useful
+    when the LLM is cold, rate-limited, or unavailable.
+    """
+    try:
+        accepted, rejected = sanitize_batch(req.findings)
+    except GateError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    results = []
+    for finding in accepted:
+        payload = finding.to_dict()
+
+        # Independent re-check before anything crosses a network boundary.
+        # sanitize_batch should make this unreachable; it runs anyway because a
+        # silent regression here would break the product's core guarantee.
+        try:
+            assert_no_leak(payload)
+        except GateError:
+            _metrics["errors"] += 1
+            logger.error("Privacy gate rejected an outbound payload for %s", finding.code)
+            continue
+
+        entry = {
+            **payload,
+            "title": REGISTRY[finding.code].title,
+            "offline": offline_advice(finding),
+            "ai": None,
+        }
+
+        if req.want_ai and assistant_instance is not None:
+            cache_key = f"finding::{finding.cache_key()}"
+            cached = await cache_manager.aget(cache_key)
+            if cached:
+                _metrics["cache_hits"] += 1
+                entry["ai"] = cached
+            else:
+                prompt = _build_advice_prompt(
+                    finding.code, finding.severity.value, finding.facets
+                )
+                try:
+                    _metrics["llm_calls"] += 1
+                    advice = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda p=prompt: assistant_instance.get_llm_response(p)
+                    )
+                    await cache_manager.aset(cache_key, advice)
+                    entry["ai"] = advice
+                except Exception as e:
+                    _metrics["errors"] += 1
+                    logger.error("Advice generation failed for %s: %s", finding.code, e)
+                    # Offline playbook already covers this finding.
+
+        results.append(entry)
+
+    results.sort(key=lambda r: _SEVERITY_RANK.get(r["sev"], 9))
+    worst = results[0]["sev"] if results else "none"
+
+    return {
+        "accepted": len(results),
+        "rejected": len(rejected),
+        "rejection_reasons": rejected[:10],
+        "worst_severity": worst,
+        "findings": results,
+    }
+
+
+@app.get("/api/security/findings/registry")
+async def findings_registry():
+    """Published contract. Clients use this to validate codes before submitting,
+    and it makes the privacy surface auditable by anyone."""
+    return registry_summary()

@@ -5,11 +5,17 @@ on:
     paths:
       - 'cyber_intel_app/**'
       - '.github/workflows/flutter_build.yml'
+    tags:
+      - 'v*'          # pushing a v* tag publishes a GitHub Release
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    # Needed by the release step; the default token is read-only in many repos.
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Code
@@ -54,3 +60,25 @@ jobs:
         with:
           name: QuantX-Cyber-Intel-App
           path: cyber_intel_app/build/app/outputs/flutter-apk/app-release.apk
+
+      # ── Release (tag-triggered only) ────────────────────────────────────────
+      # Workflow artifacts expire and need a GitHub login to download, so they
+      # can't be handed to a user. Pushing a v* tag publishes a real Release
+      # with a permanent, public APK link.
+      #   git tag v1.0.0 && git push origin v1.0.0
+      - name: Rename APK for release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          cp cyber_intel_app/build/app/outputs/flutter-apk/app-release.apk \
+             QuantX-${{ github.ref_name }}.apk
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: QuantX-${{ github.ref_name }}.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
