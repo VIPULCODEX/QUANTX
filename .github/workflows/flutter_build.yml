@@ -47,17 +47,53 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
           cat android/local.properties
 
+      # Toolchain versions decide which AGP/Gradle/compileSdk combination is
+      # valid, and Flutter enforces its own minimums. Printing them makes a
+      # version mismatch obvious instead of something to guess at.
+      - name: Toolchain versions
+        working-directory: ./cyber_intel_app
+        run: |
+          echo "───────────── flutter ─────────────"
+          flutter --version
+          echo "───────────── java ───────────────"
+          java -version
+          echo "───────────── gradle wrapper ─────"
+          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
+          echo "───────────── android sdk ────────"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls "$ANDROID_SDK_ROOT/platforms" 2>/dev/null || echo "(no platforms dir)"
+
       - name: Build APK
         working-directory: ./cyber_intel_app
         run: |
-          if ! flutter build apk --release > build_log.txt 2>&1; then
-            echo "======================================================"
-            echo "                   BUILD FAILED"
-            echo "======================================================"
-            tail -n 100 build_log.txt
-            echo "======================================================"
-            exit 1
-          fi
+          set -o pipefail
+          # --stacktrace surfaces the Gradle cause; the previous 100-line tail
+          # truncated the actual error above the visible window.
+          flutter build apk --release --stacktrace 2>&1 | tee build_log.txt
+
+      - name: Build failure diagnostics
+        if: failure()
+        working-directory: ./cyber_intel_app
+        run: |
+          echo "=================== FULL BUILD LOG ==================="
+          cat build_log.txt || echo "(no build log produced)"
+          echo "=================== GRADLE CONFIG ===================="
+          for f in android/settings.gradle android/build.gradle \
+                   android/app/build.gradle android/gradle.properties \
+                   android/local.properties; do
+            echo "--------- $f ---------"
+            cat "$f" 2>/dev/null || echo "(missing)"
+          done
+
+      # Kept even on failure so the full log is downloadable rather than
+      # truncated in the web UI.
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: cyber_intel_app/build_log.txt
+          if-no-files-found: ignore
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
