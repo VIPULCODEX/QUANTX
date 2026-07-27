@@ -1,0 +1,84 @@
+name: Release APK
+
+# Separate from flutter_build.yml on purpose. A `tags` filter and a `paths`
+# filter in the same `push` block fight each other: a tag whose commit did not
+# touch cyber_intel_app/ would be filtered out and never publish. Keeping the
+# tag trigger in its own file with no paths filter means a tag always releases.
+#
+#   git tag v1.0.0 && git push origin v1.0.0
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and release (e.g. v1.0.0)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    # Required to create a Release; the default token is read-only in most repos.
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Get Dependencies
+        working-directory: ./cyber_intel_app
+        run: flutter pub get
+
+      - name: Write local.properties
+        working-directory: ./cyber_intel_app
+        run: |
+          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+          echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
+
+      - name: Build APK
+        working-directory: ./cyber_intel_app
+        run: |
+          if ! flutter build apk --release > build_log.txt 2>&1; then
+            echo "======================================================"
+            echo "                   BUILD FAILED"
+            echo "======================================================"
+            tail -n 100 build_log.txt
+            echo "======================================================"
+            exit 1
+          fi
+
+      - name: Name the APK after the tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          cp cyber_intel_app/build/app/outputs/flutter-apk/app-release.apk \
+             "QuantX-${TAG}.apk"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: QuantX-*.apk
+          generate_release_notes: true
+          draft: false
+          # Any tag with a hyphen (v1.0.0-beta) publishes as a pre-release.
+          prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, '-') }}
+          body: |
+            **Debug-signed build.** Android will warn on install from an
+            unknown source; enable "Install unknown apps" for your browser or
+            file manager to proceed. Not suitable for Play Store submission.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
