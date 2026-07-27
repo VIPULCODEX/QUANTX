@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';   // MethodChannel
 import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -524,19 +525,29 @@ class _AppAuditTabState extends State<_AppAuditTab> {
   String? _result;
   int _appCount = 0;
 
+  // Same channel MainActivity registers. App enumeration is done natively via
+  // PackageManager rather than through the `installed_apps` plugin, which was
+  // removed for causing SDK mismatches and which returned no permission data.
+  static const _channel = MethodChannel('com.quantx.cyber_intel_app/scanner');
+
   Future<void> _audit() async {
     setState(() {
       _loading = true;
       _result = null;
     });
     try {
-      final apps = await InstalledApps.getInstalledApps(true, true);
+      final raw = await _channel.invokeMethod<List<dynamic>>(
+        'getInstalledApps',
+        {'includeSystem': false},
+      );
+      final apps = (raw ?? []).cast<Map<dynamic, dynamic>>();
       _appCount = apps.length;
 
       final appList = apps.take(40).map((app) => {
-        'name': app.name,
-        'package': app.packageName,
-        'permissions': <String>[],   // InstalledApps returns basic info; deep permission check requires root
+        'name': app['name'] ?? 'Unknown',
+        'package': app['package'] ?? '',
+        'permissions': (app['permissions'] as List<dynamic>? ?? []).cast<String>(),
+        'installer': app['installer'],
       }).toList();
 
       final resp = await http

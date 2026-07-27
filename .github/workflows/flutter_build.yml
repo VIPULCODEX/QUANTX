@@ -67,9 +67,9 @@ jobs:
         working-directory: ./cyber_intel_app
         run: |
           set -o pipefail
-          # --stacktrace surfaces the Gradle cause; the previous 100-line tail
-          # truncated the actual error above the visible window.
-          flutter build apk --release --stacktrace 2>&1 | tee build_log.txt
+          # NOTE: `flutter build apk` has no --stacktrace flag; passing one
+          # fails the command outright with exit 64. Use -v for detail.
+          flutter build apk --release 2>&1 | tee build_log.txt
 
       - name: Build failure diagnostics
         if: failure()
