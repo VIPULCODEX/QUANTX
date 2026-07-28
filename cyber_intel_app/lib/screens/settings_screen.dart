@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/liquid_glass.dart';
 
 /// Detection Mode + connection settings.
 ///
@@ -116,6 +117,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _InfoRow(label: 'History', value: 'Stored on device only'),
 
         const SizedBox(height: AppSpacing.xl),
+        Text('DISPLAY', style: AppTheme.label()),
+        const SizedBox(height: AppSpacing.sm),
+        _InfoRow(
+          label: 'Glass refraction',
+          value: LiquidGlassProgram.status,
+          dot: LiquidGlassProgram.ready
+              ? AppColors.green
+              : AppColors.medium,
+        ),
+        _InfoRow(
+          label: 'Pixel ratio',
+          value: MediaQuery.of(context).devicePixelRatio.toStringAsFixed(2),
+        ),
+        if (LiquidGlassProgram.error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Text(
+              LiquidGlassProgram.error!,
+              style: AppTheme.mono(size: 10.5),
+            ),
+          ),
+        // The lens field is invisible when it is wrong — it just looks like an
+        // ordinary blur, which is precisely how the v1.4.0 bug hid. This paints
+        // the field directly so the geometry can be checked on a real device
+        // instead of inferred from documentation.
+        ValueListenableBuilder<bool>(
+          valueListenable: LiquidGlassProgram.debug,
+          builder: (context, on, _) => SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: on,
+            onChanged: LiquidGlassProgram.ready
+                ? (v) => LiquidGlassProgram.debug.value = v
+                : null,
+            title: const Text('Show lens field',
+                style: TextStyle(
+                    color: AppColors.textPrimary, fontSize: 13.5)),
+            subtitle: const Text(
+              'Paints the refraction map on the bars. Red = bend at the rim, '
+              'green = flat interior. Black means the shader is not running.',
+              style: TextStyle(
+                  color: AppColors.textMuted, fontSize: 11.5, height: 1.4),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.xl),
         OutlinedButton.icon(
           onPressed: () => _confirmClear(context, api),
           icon: const Icon(Icons.delete_outline, size: 18),
@@ -131,7 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: AppSpacing.xl),
         Center(
-          child: Text('QuantX 1.1.0', style: AppTheme.mono(size: 11)),
+          child: Text('QuantX 1.5.0', style: AppTheme.mono(size: 11)),
         ),
       ],
     );

@@ -62,9 +62,10 @@ class _HomeShellState extends State<HomeShell> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(58 + topInset),
         child: LiquidGlass(
-          refract: 8,
-          thickness: 22,
-          specular: 0.10,
+          refract: 14,
+          thickness: 34,
+          specular: 0.12,
+          tintOpacity: 0.40,
           child: Padding(
             padding: EdgeInsets.only(top: topInset),
             child: SizedBox(
@@ -199,9 +200,10 @@ class _GlassTabBar extends StatelessWidget {
         height: expanded ? 62 : 50,
         child: LiquidGlass(
           borderRadius: BorderRadius.circular(22),
-          refract: 16,
-          thickness: 26,
-          specular: 0.18,
+          refract: 20,
+          thickness: 30,
+          specular: 0.20,
+          tintOpacity: 0.32,
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
