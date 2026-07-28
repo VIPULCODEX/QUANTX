@@ -63,8 +63,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   ? _EmptyState(onPick: _send)
                   : ListView.builder(
                       controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        MediaQuery.of(context).padding.top + 70,
+                        AppSpacing.lg,
+                        AppSpacing.sm,
+                      ),
                       itemCount: api.messages.length,
                       itemBuilder: (context, i) => _Bubble(msg: api.messages[i]),
                     ),
@@ -92,9 +96,9 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: EdgeInsets.fromLTRB(AppSpacing.xl,
+          MediaQuery.of(context).padding.top + 80, AppSpacing.xl, AppSpacing.xl),
       children: [
-        const SizedBox(height: AppSpacing.xxl),
         Center(
           child: Container(
             width: 60,
@@ -294,12 +298,9 @@ class _Composer extends StatelessWidget {
         AppSpacing.lg,
         AppSpacing.md,
         AppSpacing.lg,
-        AppSpacing.md + MediaQuery.of(context).viewPadding.bottom * 0.2,
+        AppSpacing.navBarClearance,
       ),
-      decoration: const BoxDecoration(
-        color: AppColors.bg,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
+      decoration: const BoxDecoration(color: Colors.transparent),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [

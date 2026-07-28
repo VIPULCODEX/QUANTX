@@ -24,7 +24,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final api = context.watch<ApiService>();
 
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: EdgeInsets.fromLTRB(AppSpacing.lg,
+          MediaQuery.of(context).padding.top + 74, AppSpacing.lg,
+          AppSpacing.navBarClearance),
       children: [
         Text('DETECTION MODE', style: AppTheme.label()),
         const SizedBox(height: AppSpacing.sm),
@@ -131,7 +133,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Center(
           child: Text('QuantX 1.1.0', style: AppTheme.mono(size: 11)),
         ),
-        const SizedBox(height: AppSpacing.xl),
       ],
     );
   }

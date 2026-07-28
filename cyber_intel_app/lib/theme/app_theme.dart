@@ -50,6 +50,11 @@ class AppColors {
 }
 
 class AppSpacing {
+  /// Bottom inset scrollable content must reserve to clear the floating
+  /// glass tab bar. Lives here rather than on HomeShell so screens don't
+  /// have to import the shell (which imports them back).
+  static const navBarClearance = 92.0;
+
   static const xs = 4.0;
   static const sm = 8.0;
   static const md = 12.0;

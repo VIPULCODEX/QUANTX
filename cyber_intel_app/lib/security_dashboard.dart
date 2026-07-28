@@ -6,6 +6,7 @@ import 'package:network_info_plus/network_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'config.dart';
 import 'theme/app_theme.dart';
+import 'widgets/glass.dart';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,7 +74,14 @@ class _SecurityDashboardScreenState extends State<SecurityDashboardScreen>
     );
 
     if (widget.embedded) {
-      return Column(children: [tabs, Expanded(child: content)]);
+      return Column(
+        children: [
+          // Clear the translucent app bar overlaying the body.
+          SizedBox(height: MediaQuery.of(context).padding.top + 62),
+          tabs,
+          Expanded(child: content),
+        ],
+      );
     }
 
     return Scaffold(
@@ -88,20 +96,13 @@ class _SecurityDashboardScreenState extends State<SecurityDashboardScreen>
 //  Shared Widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
-Widget _scanCard({required Widget child}) => Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F1923),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-              color: const Color(0xFF4CAF50).withOpacity(0.05),
-              blurRadius: 20)
-        ],
+Widget _scanCard({required Widget child}) => Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.navBarClearance),
+      child: GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: child,
       ),
-      child: child,
     );
 
 Widget _resultBox(String text, {Color? borderColor}) => Container(
@@ -109,15 +110,15 @@ Widget _resultBox(String text, {Color? borderColor}) => Container(
       padding: const EdgeInsets.all(14),
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF161F28),
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.bg.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
-            color: (borderColor ?? const Color(0xFF4CAF50)).withOpacity(0.4)),
+            color: (borderColor ?? AppColors.green).withOpacity(0.35)),
       ),
       child: SelectableText(
         text,
-        style:
-            const TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+        style: const TextStyle(
+            color: AppColors.textSecondary, fontSize: 13, height: 1.55),
       ),
     );
 
