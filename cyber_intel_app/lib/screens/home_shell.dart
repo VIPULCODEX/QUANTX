@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import '../security_dashboard.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
+import '../widgets/liquid_glass.dart';
 import 'chat_screen.dart';
 import 'settings_screen.dart';
 
@@ -60,8 +61,10 @@ class _HomeShellState extends State<HomeShell> {
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(58 + topInset),
-        child: GlassSurface(
-          rimBottom: true,
+        child: LiquidGlass(
+          refract: 8,
+          thickness: 22,
+          specular: 0.10,
           child: Padding(
             padding: EdgeInsets.only(top: topInset),
             child: SizedBox(
@@ -194,10 +197,11 @@ class _GlassTabBar extends StatelessWidget {
         duration: const Duration(milliseconds: 260),
         curve: Curves.easeOutCubic,
         height: expanded ? 62 : 50,
-        child: GlassSurface(
-          blur: 26,
-          rimTop: true,
+        child: LiquidGlass(
           borderRadius: BorderRadius.circular(22),
+          refract: 16,
+          thickness: 26,
+          specular: 0.18,
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
