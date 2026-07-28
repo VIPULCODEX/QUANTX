@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';   // MethodChannel
 import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'api_service.dart';
+import 'config.dart';
+import 'theme/app_theme.dart';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -13,7 +14,10 @@ import 'api_service.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SecurityDashboardScreen extends StatefulWidget {
-  const SecurityDashboardScreen({super.key});
+  /// When embedded in HomeShell the surrounding Scaffold and AppBar are
+  /// supplied by the shell, so this renders only the tabs and their content.
+  final bool embedded;
+  const SecurityDashboardScreen({super.key, this.embedded = false});
 
   @override
   State<SecurityDashboardScreen> createState() =>
@@ -23,7 +27,7 @@ class SecurityDashboardScreen extends StatefulWidget {
 class _SecurityDashboardScreenState extends State<SecurityDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final String _baseUrl = "https://vipulcdex-quantx.hf.space";
+  final String _baseUrl = AppConfig.apiBaseUrl;
 
   @override
   void initState() {
@@ -39,43 +43,43 @@ class _SecurityDashboardScreenState extends State<SecurityDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final tabs = TabBar(
+      controller: _tabController,
+      indicatorColor: AppColors.gold,
+      indicatorWeight: 2,
+      indicatorSize: TabBarIndicatorSize.tab,
+      labelColor: AppColors.gold,
+      unselectedLabelColor: AppColors.textMuted,
+      dividerColor: AppColors.border,
+      labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      unselectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+      tabs: const [
+        Tab(height: 46, icon: Icon(Icons.link, size: 17), iconMargin: EdgeInsets.only(bottom: 2), text: 'Phishing'),
+        Tab(height: 46, icon: Icon(Icons.wifi, size: 17), iconMargin: EdgeInsets.only(bottom: 2), text: 'Wi-Fi'),
+        Tab(height: 46, icon: Icon(Icons.phone_android, size: 17), iconMargin: EdgeInsets.only(bottom: 2), text: 'Device'),
+        Tab(height: 46, icon: Icon(Icons.apps, size: 17), iconMargin: EdgeInsets.only(bottom: 2), text: 'Apps'),
+      ],
+    );
+
+    final content = TabBarView(
+      controller: _tabController,
+      children: [
+        _PhishingTab(baseUrl: _baseUrl),
+        _WifiTab(baseUrl: _baseUrl),
+        _DeviceTab(baseUrl: _baseUrl),
+        _AppAuditTab(baseUrl: _baseUrl),
+      ],
+    );
+
+    if (widget.embedded) {
+      return Column(children: [tabs, Expanded(child: content)]);
+    }
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F14),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0F1923),
-        title: const Text(
-          '🔒 SECURITY SCANNER',
-          style: TextStyle(
-            color: Color(0xFFFFC857),
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            letterSpacing: 3,
-          ),
-        ),
-        centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: const Color(0xFFFFC857),
-          labelColor: const Color(0xFFFFC857),
-          unselectedLabelColor: Colors.white38,
-          isScrollable: true,
-          tabs: const [
-            Tab(icon: Icon(Icons.link, size: 16), text: 'Phishing'),
-            Tab(icon: Icon(Icons.wifi, size: 16), text: 'Wi-Fi'),
-            Tab(icon: Icon(Icons.phone_android, size: 16), text: 'Device'),
-            Tab(icon: Icon(Icons.apps, size: 16), text: 'Apps'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _PhishingTab(baseUrl: _baseUrl),
-          _WifiTab(baseUrl: _baseUrl),
-          _DeviceTab(baseUrl: _baseUrl),
-          _AppAuditTab(baseUrl: _baseUrl),
-        ],
-      ),
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(title: const Text('Security Scan'), bottom: tabs),
+      body: content,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'config.dart';
 
 class ApiMessage {
   final String role;
@@ -24,12 +25,17 @@ class ApiMessage {
 }
 
 class ApiService with ChangeNotifier {
-  String _baseUrl = "https://vipulcdex-quantx.hf.space";
-  
+  String _baseUrl = AppConfig.apiBaseUrl;
+
   final List<ApiMessage> _messages = [];
   bool _isLoading = false;
   int _queryCount = 0;
-  double _threatLevel = 15.0;
+
+  // NOTE: the old `_threatLevel` was removed. It rose by +15 on any message
+  // containing "attack" or "hack" and +2 on everything else, so it climbed
+  // with conversation length and reflected no real measurement. Presenting a
+  // fabricated risk score in a security product is worse than showing none;
+  // the real posture number will come from actual scan findings.
 
   ApiService() {
     _loadHistory();
@@ -38,7 +44,6 @@ class ApiService with ChangeNotifier {
   List<ApiMessage> get messages => _messages;
   bool get isLoading => _isLoading;
   int get queryCount => _queryCount;
-  double get threatLevel => _threatLevel;
 
   void setBaseUrl(String url) {
     _baseUrl = url;
@@ -62,13 +67,11 @@ class ApiService with ChangeNotifier {
           'user_id': 'mobile_user_1',
           'use_rag': true, // Always default to smart RAG with server fallback
         }),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(AppConfig.requestTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         String botResponse = data['response'];
-        bool isCached = data['cached'] ?? false;
-        
         // Simple logic to detect message type from response content (similar to app.py)
         String type = _detectMessageType(query, botResponse);
         
@@ -79,7 +82,6 @@ class ApiService with ChangeNotifier {
         ));
         
         _queryCount++;
-        _updateThreatLevel(query);
       } else {
         String errorMsg = "Error: ${response.statusCode}";
         if (response.statusCode == 429) errorMsg = "Rate limit exceeded. Try again later.";
@@ -118,11 +120,10 @@ class ApiService with ChangeNotifier {
   void clearChat(BuildContext context) {
     _messages.clear();
     _queryCount = 0;
-    _threatLevel = 15.0;
     _saveHistory();
     notifyListeners();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Tactical Interface Reset')),
+      const SnackBar(content: Text('Conversation history cleared')),
     );
   }
 
@@ -135,12 +136,4 @@ class ApiService with ChangeNotifier {
     return 'rag';
   }
 
-  void _updateThreatLevel(String query) {
-    // Mimic the logic in streamlit app
-    if (query.toLowerCase().contains('attack') || query.toLowerCase().contains('hack')) {
-      _threatLevel = (_threatLevel + 15).clamp(0, 100);
-    } else {
-      _threatLevel = (_threatLevel + 2).clamp(0, 95);
-    }
-  }
 }
