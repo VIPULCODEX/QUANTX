@@ -1,7 +1,7 @@
 name: cyber_intel_app
 description: "QuantX AI Cybersecurity Intelligence Mobile App"
 publish_to: 'none'
-version: 1.2.0+3
+version: 1.3.0+4
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -14,7 +14,6 @@ dependencies:
   google_fonts: ^6.1.0
   shared_preferences: ^2.2.2
   # Security Dashboard plugins
-  device_info_plus: ^11.1.1       # Android version and device details
   permission_handler: ^11.3.1     # runtime permissions for the Wi-Fi/device scans
   # NOTE: `intl` was removed — nothing imported it, and its version is a common
   # pub-resolution conflict once flutter_localizations enters the graph.

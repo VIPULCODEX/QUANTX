@@ -67,6 +67,13 @@ class MainActivity : FlutterActivity() {
                     "isAccessibilityServiceEnabled" -> {
                         result.success(isAccessibilityServiceEnabled())
                     }
+                    "runTier0Scan" -> {
+                        try {
+                            result.success(SecurityScanner.scan(applicationContext))
+                        } catch (e: Exception) {
+                            result.error("SCAN_ERROR", e.message, null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }

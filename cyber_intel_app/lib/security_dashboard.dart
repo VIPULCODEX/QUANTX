@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'config.dart';
+import 'screens/integrity_tab.dart';
 import 'services/security_channel.dart';
 import 'widgets/message_body.dart';
 import 'theme/app_theme.dart';
@@ -62,18 +62,18 @@ class _SecurityDashboardScreenState extends State<SecurityDashboardScreen>
       unselectedLabelStyle:
           const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
       tabs: const [
+        Tab(height: 46, icon: Icon(Icons.shield_outlined, size: 17), iconMargin: EdgeInsets.only(bottom: 2), text: 'Integrity'),
         Tab(height: 46, icon: Icon(Icons.link, size: 17), iconMargin: EdgeInsets.only(bottom: 2), text: 'Links'),
         Tab(height: 46, icon: Icon(Icons.wifi, size: 17), iconMargin: EdgeInsets.only(bottom: 2), text: 'Wi-Fi'),
-        Tab(height: 46, icon: Icon(Icons.phone_android, size: 17), iconMargin: EdgeInsets.only(bottom: 2), text: 'Device'),
       ],
     );
 
     final content = TabBarView(
       controller: _tabController,
       children: [
+        const IntegrityTab(),
         _PhishingTab(baseUrl: _baseUrl),
         _WifiTab(baseUrl: _baseUrl),
-        _DeviceTab(baseUrl: _baseUrl),
       ],
     );
 
@@ -786,164 +786,3 @@ class _WifiTabState extends State<_WifiTab> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Tab 3 — Device Posture
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _DeviceTab extends StatefulWidget {
-  final String baseUrl;
-  const _DeviceTab({required this.baseUrl});
-
-  @override
-  State<_DeviceTab> createState() => _DeviceTabState();
-}
-
-class _DeviceTabState extends State<_DeviceTab> {
-  bool _loading = false;
-  String? _result;
-  String _osVersion = '—';
-  String _model = '—';
-  int _sdk = 0;
-  bool _physical = true;
-
-  bool _usbDebug = false;
-  bool _unknownSources = false;
-  bool _devMode = false;
-  bool _screenLock = true;
-  bool _playProtect = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _readDevice();
-  }
-
-  Future<void> _readDevice() async {
-    try {
-      final info = await DeviceInfoPlugin().androidInfo;
-      if (!mounted) return;
-      setState(() {
-        _osVersion = 'Android ${info.version.release}';
-        _sdk = info.version.sdkInt;
-        _model = '${info.manufacturer} ${info.model}';
-        _physical = info.isPhysicalDevice;
-      });
-    } catch (_) {/* leave defaults */}
-  }
-
-  Future<void> _audit() async {
-    setState(() { _loading = true; _result = null; });
-    try {
-      final resp = await http
-          .post(
-            Uri.parse('${widget.baseUrl}/api/security/device'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'os_version': '$_osVersion (API $_sdk)',
-              'usb_debugging': _usbDebug,
-              'unknown_sources': _unknownSources,
-              'developer_mode': _devMode,
-              'screen_lock': _screenLock,
-              'google_play_protect': _playProtect,
-            }),
-          )
-          .timeout(AppConfig.requestTimeout);
-      if (resp.statusCode == 200) {
-        setState(() => _result = jsonDecode(resp.body)['analysis']);
-      } else {
-        setState(() => _result = 'Server error ${resp.statusCode}');
-      }
-    } catch (e) {
-      setState(() => _result = 'Network error: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Widget _toggle(String title, String sub, bool value, ValueChanged<bool> on,
-      {bool riskyWhenOn = true}) {
-    final risky = riskyWhenOn ? value : !value;
-    return GlassRow(
-      icon: risky ? Icons.warning_amber_rounded : Icons.check_circle_outline,
-      iconColor: risky ? AppColors.high : AppColors.safe,
-      title: title,
-      subtitle: sub,
-      trailing: Switch(
-          value: value, activeThumbColor: AppColors.gold, onChanged: on),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg,
-          AppSpacing.bottomClearance(context)),
-      children: [
-        Text('DETECTED', style: AppTheme.label()),
-        const SizedBox(height: AppSpacing.sm),
-        GlassSection(children: [
-          GlassRow(
-              icon: Icons.phone_android,
-              title: 'Device',
-              trailing: Text(_model, style: AppTheme.mono(size: 11))),
-          GlassRow(
-              icon: Icons.android,
-              title: 'OS',
-              trailing:
-                  Text('$_osVersion · API $_sdk', style: AppTheme.mono(size: 11))),
-          GlassRow(
-              icon: _physical ? Icons.verified_outlined : Icons.desktop_windows,
-              iconColor: _physical ? AppColors.safe : AppColors.high,
-              title: 'Hardware',
-              trailing: Text(_physical ? 'Physical' : 'Emulator',
-                  style: AppTheme.mono(
-                      size: 11,
-                      color: _physical ? AppColors.safe : AppColors.high))),
-        ]),
-
-        const SizedBox(height: AppSpacing.lg),
-        Text('SETTINGS YOU CONFIRM', style: AppTheme.label()),
-        const SizedBox(height: AppSpacing.xs),
-        const Text(
-          'Android does not expose these to third-party apps without elevated '
-          'access, so they are declared rather than measured. Deep Scan mode '
-          'will read them directly.',
-          style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.45),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        GlassSection(children: [
-          _toggle('USB debugging', 'ADB access over cable', _usbDebug,
-              (v) => setState(() => _usbDebug = v)),
-          _toggle('Unknown sources', 'Sideloading allowed', _unknownSources,
-              (v) => setState(() => _unknownSources = v)),
-          _toggle('Developer options', 'Debug surface enabled', _devMode,
-              (v) => setState(() => _devMode = v)),
-          _toggle('Screen lock', 'PIN, pattern or biometric', _screenLock,
-              (v) => setState(() => _screenLock = v), riskyWhenOn: false),
-          _toggle('Play Protect', 'Google malware scanning', _playProtect,
-              (v) => setState(() => _playProtect = v), riskyWhenOn: false),
-        ]),
-
-        const SizedBox(height: AppSpacing.lg),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: _loading ? null : _audit,
-            icon: _loading
-                ? const SizedBox(
-                    width: 15,
-                    height: 15,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Color(0xFF1A1200)))
-                : const Icon(Icons.shield_outlined, size: 17),
-            label: Text(_loading ? 'Auditing…' : 'Run device audit'),
-          ),
-        ),
-        if (_result != null) ...[
-          const SizedBox(height: AppSpacing.lg),
-          GlassCard(child: MessageBody(text: _result!)),
-        ],
-      ],
-    );
-  }
-}

@@ -53,6 +53,18 @@ class SecurityChannel {
     }
   }
 
+  /// Run the Tier 0 detector.
+  ///
+  /// Returns raw finding maps including on-device `evidence`, which must never
+  /// be forwarded — see [Finding.toWire].
+  static Future<List<Map<String, dynamic>>> runTier0Scan() async {
+    final raw = await _channel.invokeMethod<List<dynamic>>('runTier0Scan');
+    return (raw ?? [])
+        .cast<Map<dynamic, dynamic>>()
+        .map((m) => m.map((k, v) => MapEntry('$k', v)))
+        .toList();
+  }
+
   /// Connected network's real security type, read from the system.
   static Future<Map<String, dynamic>> getWifiSecurity() async {
     final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(

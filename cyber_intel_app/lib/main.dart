@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'api_service.dart';
+import 'services/scan_service.dart';
 import 'screens/home_shell.dart';
 import 'theme/app_theme.dart';
 
@@ -19,6 +20,7 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ApiService()),
+        ChangeNotifierProvider(create: (_) => ScanService()),
       ],
       child: const QuantXApp(),
     ),
