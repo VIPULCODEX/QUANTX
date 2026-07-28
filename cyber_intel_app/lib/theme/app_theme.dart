@@ -50,10 +50,14 @@ class AppColors {
 }
 
 class AppSpacing {
-  /// Bottom inset scrollable content must reserve to clear the floating
-  /// glass tab bar. Lives here rather than on HomeShell so screens don't
-  /// have to import the shell (which imports them back).
-  static const navBarClearance = 92.0;
+  /// Height of the floating glass tab bar itself. Screens must ALSO add the
+  /// device's own bottom inset — see [bottomClearance]. Getting that wrong is
+  /// what put the tab bar under the system navigation bar.
+  static const navBarClearance = 86.0;
+
+  /// Total bottom padding a scrollable needs: tab bar + system navigation.
+  static double bottomClearance(BuildContext context) =>
+      navBarClearance + MediaQuery.of(context).padding.bottom;
 
   static const xs = 4.0;
   static const sm = 8.0;

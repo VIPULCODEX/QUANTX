@@ -298,7 +298,7 @@ class _Composer extends StatelessWidget {
         AppSpacing.lg,
         AppSpacing.md,
         AppSpacing.lg,
-        AppSpacing.navBarClearance,
+        AppSpacing.bottomClearance(context),
       ),
       decoration: const BoxDecoration(color: Colors.transparent),
       child: Row(

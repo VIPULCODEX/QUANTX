@@ -26,7 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: EdgeInsets.fromLTRB(AppSpacing.lg,
           MediaQuery.of(context).padding.top + 74, AppSpacing.lg,
-          AppSpacing.navBarClearance),
+          AppSpacing.bottomClearance(context)),
       children: [
         Text('DETECTION MODE', style: AppTheme.label()),
         const SizedBox(height: AppSpacing.sm),

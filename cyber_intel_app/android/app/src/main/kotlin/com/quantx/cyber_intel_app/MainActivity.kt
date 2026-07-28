@@ -1,7 +1,10 @@
 package com.quantx.cyber_intel_app
 
+import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.wifi.WifiInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -54,6 +57,16 @@ class MainActivity : FlutterActivity() {
                             result.error("PM_ERROR", e.message, null)
                         }
                     }
+                    "getWifiSecurity" -> {
+                        try {
+                            result.success(getWifiSecurity())
+                        } catch (e: Exception) {
+                            result.error("WIFI_ERROR", e.message, null)
+                        }
+                    }
+                    "isAccessibilityServiceEnabled" -> {
+                        result.success(isAccessibilityServiceEnabled())
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -87,6 +100,122 @@ class MainActivity : FlutterActivity() {
                 "installer" to installerOf(pkg.packageName)
             )
         }
+    }
+
+    // ── Wi-Fi security ───────────────────────────────────────────────────────
+    /**
+     * Read the connected network's ACTUAL security type from the system.
+     *
+     * The Dart side previously carried the comment "Android doesn't expose
+     * security type directly via API — we ask user", and presented a manual
+     * WPA3/WPA2/WEP/Open picker. That is not true on modern Android:
+     *
+     *   API 31+  WifiInfo.getCurrentSecurityType() reports it directly.
+     *   Below    ScanResult.capabilities for the connected BSSID carries it as
+     *            a string like "[WPA2-PSK-CCMP][ESS]".
+     *
+     * A user-supplied security type is worthless for a security audit anyway —
+     * an attacker's rogue AP does not become safe because the user picked WPA3
+     * from a dropdown.
+     */
+    @Suppress("DEPRECATION")
+    private fun getWifiSecurity(): Map<String, Any?> {
+        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val info: WifiInfo? = wm.connectionInfo
+
+        val ssidRaw = info?.ssid ?: ""
+        val ssid = ssidRaw.trim('"')
+        val bssid = info?.bssid
+        val connected = info != null &&
+            ssid.isNotEmpty() &&
+            ssid != "<unknown ssid>" &&
+            info.networkId != -1
+
+        var security = "UNKNOWN"
+        var source = "unavailable"
+
+        if (connected) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                security = when (info!!.currentSecurityType) {
+                    WifiInfo.SECURITY_TYPE_OPEN -> "OPEN"
+                    WifiInfo.SECURITY_TYPE_WEP -> "WEP"
+                    WifiInfo.SECURITY_TYPE_PSK -> "WPA/WPA2 PSK"
+                    WifiInfo.SECURITY_TYPE_EAP -> "WPA/WPA2 Enterprise"
+                    WifiInfo.SECURITY_TYPE_SAE -> "WPA3 SAE"
+                    WifiInfo.SECURITY_TYPE_OWE -> "Enhanced Open (OWE)"
+                    WifiInfo.SECURITY_TYPE_WAPI_PSK -> "WAPI PSK"
+                    WifiInfo.SECURITY_TYPE_WAPI_CERT -> "WAPI Cert"
+                    else -> "UNKNOWN"
+                }
+                source = "WifiInfo.currentSecurityType"
+            }
+            // Pre-31, or when the API reports UNKNOWN, fall back to the
+            // capability string of the matching scan result.
+            if (security == "UNKNOWN" && bssid != null) {
+                try {
+                    val match = wm.scanResults?.firstOrNull { it.BSSID == bssid }
+                    if (match != null) {
+                        security = parseCapabilities(match.capabilities)
+                        source = "ScanResult.capabilities"
+                    }
+                } catch (e: SecurityException) {
+                    // scanResults needs location permission + location enabled
+                    source = "denied: location permission required"
+                }
+            }
+        }
+
+        return mapOf(
+            "connected" to connected,
+            "ssid" to if (connected) ssid else null,
+            "security" to security,
+            "source" to source,
+            "rssi" to info?.rssi,
+            "linkSpeedMbps" to info?.linkSpeed,
+            "frequencyMhz" to info?.frequency,
+            "band" to bandOf(info?.frequency),
+            "hidden" to (info?.hiddenSSID ?: false),
+            "sdkInt" to Build.VERSION.SDK_INT
+        )
+    }
+
+    /** e.g. "[WPA2-PSK-CCMP][RSN-PSK-CCMP][ESS]" -> "WPA/WPA2 PSK" */
+    private fun parseCapabilities(caps: String?): String {
+        if (caps.isNullOrBlank()) return "UNKNOWN"
+        val c = caps.uppercase()
+        return when {
+            c.contains("WPA3") || c.contains("SAE") -> "WPA3 SAE"
+            c.contains("OWE") -> "Enhanced Open (OWE)"
+            c.contains("WPA2") || c.contains("RSN") -> "WPA/WPA2 PSK"
+            c.contains("WPA") -> "WPA (legacy)"
+            c.contains("WEP") -> "WEP"
+            // [ESS] with no cipher block means no encryption at all.
+            c.contains("ESS") -> "OPEN"
+            else -> "UNKNOWN"
+        }
+    }
+
+    private fun bandOf(freq: Int?): String? = when {
+        freq == null || freq <= 0 -> null
+        freq >= 5925 -> "6 GHz"
+        freq >= 4900 -> "5 GHz"
+        else -> "2.4 GHz"
+    }
+
+    // ── Accessibility service state ──────────────────────────────────────────
+    /**
+     * Whether the QuantX URL scanner is currently bound.
+     *
+     * ENABLED_ACCESSIBILITY_SERVICES is readable by any app with no permission
+     * at all — which is why the accessibility audit is a Tier 0 capability.
+     */
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val expected = "$packageName/$packageName.QuantXScannerService"
+        val enabled = android.provider.Settings.Secure.getString(
+            contentResolver,
+            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
     }
 
     /** Install source, used to distinguish store installs from sideloads. */

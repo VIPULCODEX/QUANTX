@@ -186,8 +186,10 @@ class _GlassTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
+      // FULL bottom inset, not a fraction of it. Scaling it down put the bar
+      // underneath the system navigation bar on 3-button-nav devices.
       padding: EdgeInsets.fromLTRB(
-          AppSpacing.lg, 0, AppSpacing.lg, bottomInset * 0.35 + AppSpacing.md),
+          AppSpacing.lg, 0, AppSpacing.lg, bottomInset + AppSpacing.sm),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 260),
         curve: Curves.easeOutCubic,
