@@ -155,8 +155,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(
                     color: AppColors.textPrimary, fontSize: 13.5)),
             subtitle: const Text(
-              'Paints the refraction map on the bars. Red = bend at the rim, '
-              'green = flat interior. Black means the shader is not running.',
+              'Paints the refraction map on the bars. A red band hugging the '
+              'edge with a white line through it is correct — the line marks '
+              'the rim width. All black means the shader is not running.',
               style: TextStyle(
                   color: AppColors.textMuted, fontSize: 11.5, height: 1.4),
             ),

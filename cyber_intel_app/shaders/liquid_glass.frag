@@ -127,8 +127,21 @@ void main() {
     // Debug: paint the lens field itself. Confirms on-device that the shader is
     // running and that the panel rect matches the texture — a question no
     // amount of reading the docs settled definitively.
+    //
+    // Ramped on `bend` alone. The first version also mapped `depth` to green,
+    // which meant the flat interior — where depth is 1 everywhere — rendered as
+    // full-brightness green across the whole panel and visually swamped the
+    // narrow red rim that is the only part worth looking at. Interior now falls
+    // to black, so the rim is the only thing lit.
     if (uDebug > 0.5) {
-        fragColor = vec4(bend, depth, 0.0, 1.0);
+        vec3 c = vec3(0.06, 0.10, 0.22) * smoothstep(0.00, 0.30, bend)
+               + vec3(0.00, 0.50, 0.70) * smoothstep(0.25, 0.60, bend)
+               + vec3(0.80, 0.42, 0.00) * smoothstep(0.55, 0.88, bend)
+               + vec3(1.00, 0.14, 0.10) * smoothstep(0.85, 1.00, bend);
+        // Isoline at half bend: makes the rim WIDTH measurable by eye, not just
+        // its presence.
+        c += vec3(0.9) * smoothstep(0.03, 0.0, abs(bend - 0.5));
+        fragColor = vec4(c, 1.0);
         return;
     }
 
