@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/glass_preview.dart';
 import '../widgets/liquid_glass.dart';
 
 /// Detection Mode + connection settings.
@@ -138,30 +139,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: AppTheme.mono(size: 10.5),
             ),
           ),
-        // The lens field is invisible when it is wrong — it just looks like an
-        // ordinary blur, which is precisely how the v1.4.0 bug hid. This paints
-        // the field directly so the geometry can be checked on a real device
-        // instead of inferred from documentation.
-        ValueListenableBuilder<bool>(
-          valueListenable: LiquidGlassProgram.debug,
-          builder: (context, on, _) => SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            value: on,
-            onChanged: LiquidGlassProgram.ready
-                ? (v) => LiquidGlassProgram.debug.value = v
-                : null,
-            title: const Text('Show lens field',
-                style: TextStyle(
-                    color: AppColors.textPrimary, fontSize: 13.5)),
-            subtitle: const Text(
-              'Paints the refraction map on the bars. A red band hugging the '
-              'edge with a white line through it is correct — the line marks '
-              'the rim width. All black means the shader is not running.',
-              style: TextStyle(
-                  color: AppColors.textMuted, fontSize: 11.5, height: 1.4),
-            ),
-          ),
+        const SizedBox(height: AppSpacing.md),
+        // Replaces the "Show lens field" switch, which painted the real
+        // navigation bars in false colour. That answered one question — is the
+        // panel geometry right — and once answered it had no use left, while
+        // remaining the oddest thing on this screen. Dragging a pane over a
+        // ring target shows the same thing and needs no legend to read.
+        const GlassPreview(),
+        const SizedBox(height: AppSpacing.sm),
+        const Text(
+          'Drag the pane across the rings. They should bow at its edges and '
+          'stay straight through its middle — the flat centre is deliberate, '
+          'so text behind glass stays readable.',
+          style: TextStyle(
+              color: AppColors.textMuted, fontSize: 11.5, height: 1.45),
         ),
 
         const SizedBox(height: AppSpacing.xl),
