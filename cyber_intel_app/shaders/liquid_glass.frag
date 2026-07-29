@@ -39,6 +39,18 @@ uniform float uSpecular;    // float 5   — highlight intensity, 0..1
 uniform float uDpr;         // float 6   — device pixel ratio
 uniform float uDebug;       // float 7   — >0.5 renders the lens field directly
 uniform float uBlur;        // float 8   — frost radius, logical px
+
+// ── Travelling lens ─────────────────────────────────────────────────────────
+// A second, smaller lens that slides inside the panel: the selected-tab
+// indicator. Implemented as extra uniforms on THIS shader rather than as a
+// nested BackdropFilter, because nesting would mean a second saveLayer and a
+// second full backdrop re-filter every frame, for a capsule a fifth the size of
+// the bar. Here it costs two more SDF evaluations per fragment and no layers.
+uniform vec2  uPillC;       // float 9,10  — centre, logical px, panel-local
+uniform vec2  uPillHalf;    // float 11,12 — half extent, logical px
+uniform float uPillR;       // float 13    — corner radius, logical px
+uniform float uPillOn;      // float 14    — 0 disables it entirely
+
 uniform sampler2D uTexture; // sampler 0 — ENGINE SET. the backdrop snapshot
 
 out vec4 fragColor;
@@ -149,6 +161,43 @@ void main() {
     // displaced position. Order matters — frosting first and refracting after
     // would smear an already-blurred image and lose the bend entirely.
     vec2 offset = normal * bend * refract;
+
+    // ── Travelling lens ─────────────────────────────────────────────────────
+    // The sliding indicator gets its own distance field, normal and bend, and
+    // its displacement ADDS to the panel's. Where the two overlap near the bar
+    // ends the deflections compound, which is what a real thick-glass droplet
+    // resting on a pane does — the rim of one bends light already bent by the
+    // other.
+    float pillRim = 0.0;
+    if (uPillOn > 0.5) {
+        vec2  pc  = uPillC * dpr;
+        vec2  ph  = uPillHalf * dpr;
+        float pr  = min(uPillR * dpr, min(ph.x, ph.y));
+        vec2  pp  = frag - pc;
+
+        float pd = sdRoundedBox(pp, ph, pr);
+        if (pd < 0.0) {
+            vec2 pgrad = vec2(
+                sdRoundedBox(pp + vec2(e, 0.0), ph, pr) -
+                sdRoundedBox(pp - vec2(e, 0.0), ph, pr),
+                sdRoundedBox(pp + vec2(0.0, e), ph, pr) -
+                sdRoundedBox(pp - vec2(0.0, e), ph, pr)
+            );
+            vec2 pnormal = normalize(pgrad + vec2(1e-6));
+
+            // A tighter rim than the panel's: the indicator should read as a
+            // thicker, more curved piece of glass sitting on top, not as a
+            // second flat sheet.
+            float pdepth = clamp(-pd / max(uPillHalf.y * dpr * 0.9, 1.0), 0.0, 1.0);
+            float pbend  = (1.0 - pdepth) * (1.0 - pdepth);
+
+            offset += pnormal * pbend * refract * 0.85;
+
+            vec2  plight = normalize(vec2(-0.55, -0.83));
+            pillRim = pow(max(dot(pnormal, plight), 0.0), 2.5) * pbend;
+        }
+    }
+
     vec4 refracted = frost(frag + offset, uBlur * dpr);
 
     // Specular rim: a fixed light from the upper-left catching the bevel. Not
@@ -157,5 +206,9 @@ void main() {
     float facing   = max(dot(normal, lightDir), 0.0);
     float rim      = pow(facing, 3.0) * bend * uSpecular;
 
-    fragColor = refracted + vec4(vec3(rim), 0.0);
+    // The travelling lens catches the same light, slightly warmer, so it reads
+    // as a distinct piece of glass rather than a brighter patch of the panel.
+    vec3 highlight = vec3(rim) + vec3(1.0, 0.92, 0.74) * pillRim * uSpecular * 1.6;
+
+    fragColor = refracted + vec4(highlight, 0.0);
 }

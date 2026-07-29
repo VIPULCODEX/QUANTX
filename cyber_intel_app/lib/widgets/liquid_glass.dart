@@ -72,6 +72,7 @@ class LiquidGlassProgram {
     required double specular,
     required double dpr,
     required double blur,
+    GlassLens? lens,
   }) {
     final p = _program;
     if (p == null) return null;
@@ -83,8 +84,42 @@ class LiquidGlassProgram {
     s.setFloat(6, dpr);
     s.setFloat(7, debug.value ? 1.0 : 0.0);
     s.setFloat(8, blur);
+    s.setFloat(9, lens?.center.dx ?? 0);
+    s.setFloat(10, lens?.center.dy ?? 0);
+    s.setFloat(11, (lens?.size.width ?? 0) / 2);
+    s.setFloat(12, (lens?.size.height ?? 0) / 2);
+    s.setFloat(13, lens?.radius ?? 0);
+    s.setFloat(14, lens == null ? 0.0 : 1.0);
     return s;
   }
+}
+
+/// A second lens travelling inside a [LiquidGlass] panel — the selected-tab
+/// indicator.
+///
+/// Coordinates are logical pixels relative to the panel's own top-left, which
+/// is what a LayoutBuilder inside the panel measures. The shader converts to
+/// device pixels itself.
+class GlassLens {
+  final Offset center;
+  final Size size;
+  final double radius;
+
+  const GlassLens({
+    required this.center,
+    required this.size,
+    required this.radius,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is GlassLens &&
+      other.center == center &&
+      other.size == size &&
+      other.radius == radius;
+
+  @override
+  int get hashCode => Object.hash(center, size, radius);
 }
 
 /// A glass panel that refracts the content painted behind it.
@@ -114,6 +149,10 @@ class LiquidGlass extends StatelessWidget {
   final double blur;
   final Color? tint;
 
+  /// Optional travelling lens drawn inside this panel. Costs two extra SDF
+  /// evaluations per fragment — no additional layer, no second saveLayer.
+  final GlassLens? lens;
+
   /// Opacity of the tint wash. Low enough that the refracted backdrop stays
   /// visible through it — an opaque panel would hide the very effect it exists
   /// to show — but high enough to keep labels legible over busy content.
@@ -129,6 +168,7 @@ class LiquidGlass extends StatelessWidget {
     this.blur = 8,
     this.tint,
     this.tintOpacity = 0.34,
+    this.lens,
   });
 
   @override
@@ -150,6 +190,7 @@ class LiquidGlass extends StatelessWidget {
                   specular: specular,
                   dpr: dpr,
                   blur: blur,
+                  lens: lens,
                 )
               : null;
 
