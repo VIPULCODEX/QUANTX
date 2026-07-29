@@ -24,11 +24,23 @@ class LiquidGlassProgram {
   static bool get ready => _program != null;
   static String? get error => _error;
 
+  /// Set when ImageFilter.shader itself is rejected at runtime — which is a
+  /// different failure from the program not loading, and the one that indicates
+  /// a Skia backend rather than a bad shader.
+  static bool _filterRejected = false;
+
+  static void noteFilterFailure(Object e) {
+    if (_filterRejected) return;
+    _filterRejected = true;
+    _error = 'ImageFilter.shader rejected (Impeller unavailable?): $e';
+  }
+
   /// Human-readable state for the Settings diagnostics row.
   static String get status {
+    if (_filterRejected) return 'Fallback — no Impeller';
     if (_program != null) return debug.value ? 'Active (debug view)' : 'Active';
     if (!_tried) return 'Not loaded';
-    return 'Fallback — blur only';
+    return 'Fallback — shader failed to load';
   }
 
   static Future<void> load() async {
@@ -145,9 +157,20 @@ class LiquidGlass extends StatelessWidget {
           // the filtered coverage, so the texture the shader receives no longer
           // matches the panel rect its distance field assumes (flutter#170820).
           // The frost is done inside the shader instead.
-          filter = shader != null
-              ? ui.ImageFilter.shader(shader)
-              : ui.ImageFilter.blur(sigmaX: blur + 12, sigmaY: blur + 12);
+          //
+          // The try/catch is not defensive padding. FragmentProgram.fromAsset
+          // succeeds on BOTH backends, so `ready` proves only that the program
+          // loaded — ImageFilter.shader itself throws UnsupportedError on Skia.
+          // Without this, a device that fell back to Skia would not lose the
+          // effect, it would crash on every frame that drew a navigation bar.
+          try {
+            filter = shader != null
+                ? ui.ImageFilter.shader(shader)
+                : ui.ImageFilter.blur(sigmaX: blur + 12, sigmaY: blur + 12);
+          } catch (e) {
+            LiquidGlassProgram.noteFilterFailure(e);
+            filter = ui.ImageFilter.blur(sigmaX: blur + 12, sigmaY: blur + 12);
+          }
 
           return BackdropFilter(
             filter: filter,

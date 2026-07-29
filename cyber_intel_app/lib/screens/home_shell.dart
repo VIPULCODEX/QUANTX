@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import '../security_dashboard.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ambient_backdrop.dart';
 import '../widgets/glass.dart';
 import '../widgets/liquid_glass.dart';
 import 'chat_screen.dart';
@@ -106,16 +107,25 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       ),
-      body: NotificationListener<ScrollNotification>(
-        onNotification: _onScroll,
-        child: IndexedStack(
-          index: _index,
-          children: const [
-            ChatScreen(),
-            SecurityDashboardScreen(embedded: true),
-            SettingsScreen(),
-          ],
-        ),
+      // The ambient layer is painted FIRST so both glass bars have something to
+      // refract. Order is the whole point: a BackdropFilter samples what was
+      // painted before it, so anything below this in the stack is invisible to
+      // the shader.
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AmbientBackdrop()),
+          NotificationListener<ScrollNotification>(
+            onNotification: _onScroll,
+            child: IndexedStack(
+              index: _index,
+              children: const [
+                ChatScreen(),
+                SecurityDashboardScreen(embedded: true),
+                SettingsScreen(),
+              ],
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: _GlassTabBar(
         index: _index,
