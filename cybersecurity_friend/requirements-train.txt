@@ -1,0 +1,56 @@
+# QuantX — model training dependencies (PEFT / representation finetuning).
+#
+# Separate from requirements.txt on purpose: the serving image should not carry
+# a multi-gigabyte training stack, and the training box needs packages the API
+# server has no use for.
+#
+#   pip install -r requirements.txt -r requirements-train.txt
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# READ THIS BEFORE INSTALLING TORCH
+# ─────────────────────────────────────────────────────────────────────────────
+# `pip install torch` gives you a CPU-ONLY wheel. The machine this project moved
+# from had exactly that — torch 2.9.1+cpu, torch.cuda.is_available() == False —
+# which trains without error and simply takes a hundred times longer. It is a
+# silent failure, not a loud one.
+#
+# On the GPU machine, install torch FIRST from the CUDA index, then install the
+# rest of this file:
+#
+#   pip install torch==2.9.1 --index-url https://download.pytorch.org/whl/cu124
+#
+# Substitute the cu### tag matching the installed driver (`nvidia-smi`). Then
+# verify before starting a run that could waste a day:
+#
+#   python -c "import torch; assert torch.cuda.is_available(), 'CPU-ONLY BUILD'; \
+#              print(torch.cuda.get_device_name(0))"
+#
+# torch is deliberately NOT pinned below — pinning it here would let pip pull the
+# CPU wheel over a correctly installed CUDA build.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# --- Core training stack ---
+transformers==4.47.0
+peft==0.14.0
+datasets==4.8.4
+accelerate==1.13.0
+safetensors==0.7.0
+sentencepiece==0.2.1
+huggingface_hub==0.36.2
+
+# --- Quantised / memory-efficient finetuning ---
+# Linux + CUDA only. Skip on Windows or CPU-only hosts.
+bitsandbytes==0.50.0
+
+# --- Supervised finetuning helpers ---
+trl==1.9.2
+
+# --- Representation finetuning (LoReFT) ---
+# The Stanford ReFT line of work, chosen over classical RAG for the
+# finding-code -> remediation task. Early version: expect API churn, and pin
+# whatever actually trains rather than trusting this number indefinitely.
+pyreft==0.1.0
+
+# --- Evaluation / analysis ---
+pandas==2.3.3
+scipy==1.16.3

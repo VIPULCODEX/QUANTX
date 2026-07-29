@@ -25,6 +25,12 @@ faiss_index/
 .DS_Store
 Thumbs.db
 
+# ─── Stale local copy of the phishsense project ───
+# Was recorded as a submodule gitlink with no .gitmodules, so a fresh clone got an
+# empty directory it could never populate. The real repository lives at
+# github.com/VIPULCODEX/phishsense and should be consumed from there.
+project/
+
 # ─── Local-only docs (keep locally, not on GitHub) ─
 PROJECT_LOG.txt
 README.md
@@ -36,5 +42,9 @@ cyber_intel_app/build/
 cyber_intel_app/.flutter-plugins
 cyber_intel_app/.flutter-plugins-dependencies
 cyber_intel_app/.packages
-cyber_intel_app/pubspec.lock
+# pubspec.lock is intentionally NOT ignored. It is an application, not a library,
+# and the lockfile is what makes two machines (and CI) resolve the same plugin
+# versions. Ignoring it meant every build was free to pick different transitive
+# dependencies, which is a debugging nightmare that only shows up as "works on
+# my machine". Commit it after the first `flutter pub get`.
 

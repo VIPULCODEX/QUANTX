@@ -1,45 +1,62 @@
 # QuantX - AI Assistant + PhishSense Security Scanner
-# Python dependencies
+# Serving / inference dependencies. For model training see requirements-train.txt.
+#
 # Install with: pip install -r requirements.txt
+#
+# Versions are pinned to the set this codebase is known to run on, captured from a
+# working environment rather than resolved fresh. Unpinned requirements meant two
+# machines could resolve different versions on different days, which makes it
+# impossible to tell whether a behaviour change came from our code or from a
+# dependency that moved underneath it.
 
 # --- LangChain Core ---
-langchain
-langchain-core
-langchain-community
-langchain-text-splitters
+langchain==1.2.15
+langchain-core==1.2.26
+langchain-community==0.4.1
+langchain-text-splitters==1.1.1
+langchain-classic==1.0.3
 
 # --- LangChain Integrations ---
-langchain-huggingface
-langchain-google-genai
-langchain-groq
+langchain-huggingface==1.2.1
+langchain-google-genai==4.2.1
+langchain-groq==1.1.2
 
 # --- Embeddings & Vector Store ---
-sentence-transformers
-faiss-cpu
+sentence-transformers==5.3.0
+# CPU build. Only needed while RAG is still in use; if SLIDERS replaces it this
+# can be dropped entirely rather than swapped for a GPU build.
+faiss-cpu==1.13.2
 
 # --- Google Gemini ---
-google-generativeai
+google-generativeai==0.8.6
+google-genai==1.70.0
 
 # --- Document Loading ---
-pypdf
+pypdf==6.9.2
 
 # --- HTTP & Env ---
-requests
-python-dotenv
+requests==2.32.5
+python-dotenv==1.2.2
+httpx==0.28.1
 
 # --- Utilities ---
-tqdm
+tqdm==4.67.1
+numpy==2.2.6
 
 # --- Streamlit UI ---
-streamlit
+streamlit==1.50.0
 
 # --- FastAPI Backend ---
-fastapi
-uvicorn[standard]
-gunicorn
-
-# --- Async HTTP ---
-httpx
+fastapi==0.135.1
+uvicorn[standard]==0.41.0
+gunicorn==25.3.0
 
 # --- PhishSense ML (Scam/Phishing/URL Detector) ---
+# DELIBERATE PIN — DO NOT BUMP CASUALLY. The serialised PhishSense model was
+# produced under 1.6.1, and scikit-learn does not guarantee unpickling across
+# minor versions: a mismatch can load *silently* and score incorrectly rather
+# than fail loudly. Retrain the model before changing this.
+#
+# NOTE: the machine this snapshot came from has 1.8.0 installed, i.e. it is
+# already off-spec. Verify PhishSense predictions there before trusting them.
 scikit-learn==1.6.1
