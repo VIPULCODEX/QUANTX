@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/services.dart' show HapticFeedback;
 import '../security_dashboard.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ambient_backdrop.dart';
@@ -209,6 +210,21 @@ class _GlassTabBarState extends State<_GlassTabBar>
   late double _from;
   late double _to;
 
+  /// Continuous finger position in slot units while a drag is live. Null when
+  /// the indicator is under animation control instead.
+  double? _drag;
+
+  /// Smoothed horizontal speed in slots/frame, used to deform the capsule while
+  /// it is being pulled. Smoothed because raw per-event deltas on a touch screen
+  /// are noisy enough to make the stretch jitter visibly.
+  double _vel = 0;
+
+  /// Slot the finger was last over, so the haptic tick fires once per crossing
+  /// rather than on every pointer move.
+  int _lastTick = -1;
+
+  bool get _dragging => _drag != null;
+
   @override
   void initState() {
     super.initState();
@@ -223,7 +239,7 @@ class _GlassTabBarState extends State<_GlassTabBar>
   @override
   void didUpdateWidget(covariant _GlassTabBar old) {
     super.didUpdateWidget(old);
-    if (old.index != widget.index) {
+    if (old.index != widget.index && !_dragging) {
       // Retarget from wherever the indicator currently IS, not from the
       // previous tab. Tapping mid-flight otherwise makes it jump backwards
       // before setting off again.
@@ -235,6 +251,52 @@ class _GlassTabBarState extends State<_GlassTabBar>
 
   double _positionAt(double t) =>
       _from + (_to - _from) * Curves.easeOutCubic.transform(t.clamp(0, 1));
+
+  /// Where the capsule is right now, from whichever source owns it.
+  double get _pos => _drag ?? _positionAt(_slide.value);
+
+  double _slotAt(double dx, double slotW, int count) =>
+      (dx / slotW - 0.5).clamp(0.0, count - 1.0);
+
+  void _grab(double dx, double slotW, int count) {
+    _slide.stop();
+    setState(() {
+      _drag = _slotAt(dx, slotW, count);
+      _vel = 0;
+      _lastTick = _drag!.round();
+    });
+  }
+
+  void _move(double dx, double slotW, int count) {
+    final next = _slotAt(dx, slotW, count);
+    setState(() {
+      // Low-pass filter: 0.35 of the new delta, 0.65 of the running value.
+      _vel = _vel * 0.65 + (next - (_drag ?? next)) * 0.35;
+      _drag = next;
+    });
+
+    final over = next.round();
+    if (over != _lastTick) {
+      _lastTick = over;
+      // Fires as the capsule crosses into a tab, not when the finger lifts —
+      // the feedback should describe where the indicator is, not what will be
+      // committed later.
+      HapticFeedback.selectionClick();
+    }
+  }
+
+  void _release(int count) {
+    if (!_dragging) return;
+    final landed = _drag!.round().clamp(0, count - 1);
+    setState(() {
+      _from = _drag!;
+      _to = landed.toDouble();
+      _drag = null;
+      _vel = 0;
+    });
+    _slide.forward(from: 0);
+    if (landed != widget.index) widget.onSelect(landed);
+  }
 
   @override
   void dispose() {
@@ -263,68 +325,113 @@ class _GlassTabBarState extends State<_GlassTabBar>
             return AnimatedBuilder(
               animation: _slide,
               builder: (context, child) {
-                final pos = _positionAt(_slide.value);
-                final travel = (_to - _from).abs();
+                final pos = _pos;
 
-                // The liquid part. A capsule that merely translates reads as a
-                // sliding rectangle; one that stretches along its direction of
-                // travel and settles back reads as a droplet being pulled.
-                // sin() peaks at mid-flight and returns to zero at both ends,
-                // so the indicator is always its resting size when stationary.
-                final stretch =
-                    math.sin(_slide.value * math.pi) * travel.clamp(0.0, 1.6);
+                // Two sources of deformation, never both at once.
+                //
+                // Released: sin() over the flight, peaking mid-travel and
+                // exactly zero at both ends, scaled by distance — so a settled
+                // capsule is always its resting size.
+                //
+                // Held: the finger's own speed. This is the part that makes a
+                // drag feel like pulling something viscous rather than
+                // scrubbing a slider; the capsule lags into shape as you move
+                // and relaxes the instant you stop, without you letting go.
+                final double stretch = _dragging
+                    ? (_vel.abs() * 9).clamp(0.0, 1.0)
+                    : math.sin(_slide.value * math.pi) *
+                        (_to - _from).abs().clamp(0.0, 1.6);
 
                 final restW = slotW - 10;
                 final pillW = restW + stretch * slotW * 0.34;
-                final pillH = h - 10;
+                // Held capsules sit a touch taller — the "picked up" cue. Small
+                // on purpose: enough to feel, not enough to notice as a change
+                // in size.
+                final pillH = (h - 10) + (_dragging ? 2.0 : 0.0);
 
                 return LiquidGlass(
                   borderRadius: BorderRadius.circular(22),
                   refract: 20,
                   thickness: 30,
-                  specular: 0.20,
+                  specular: _dragging ? 0.28 : 0.20,
                   tintOpacity: 0.32,
                   lens: GlassLens(
                     center: Offset((pos + 0.5) * slotW, h / 2),
                     size: Size(pillW, pillH),
                     radius: pillH / 2,
                   ),
-                  child: Stack(
-                    children: [
-                      // Visible capsule, positioned identically to the lens so
-                      // the highlight and the refraction stay locked together.
-                      Positioned(
-                        left: (pos + 0.5) * slotW - pillW / 2,
-                        top: 5,
-                        width: pillW,
-                        height: pillH,
-                        child: const _Indicator(),
-                      ),
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(
-                                color: Colors.white.withOpacity(0.07)),
-                          ),
-                          child: Row(
-                            children: [
-                              for (var i = 0; i < count; i++)
-                                Expanded(
-                                  child: _Tab(
-                                    icon: _GlassTabBar.items[i].$1,
-                                    activeIcon: _GlassTabBar.items[i].$2,
-                                    label: _GlassTabBar.items[i].$3,
-                                    selected: widget.index == i,
-                                    compact: !widget.expanded,
-                                    onTap: () => widget.onSelect(i),
-                                  ),
-                                ),
-                            ],
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    // Tap and horizontal drag share one arena here rather than
+                    // living on each tab. Per-tab detectors could not express a
+                    // drag that crosses tabs — the gesture would be claimed by
+                    // whichever child it started in and die at its boundary.
+                    onTapUp: (d) {
+                      final i = _slotAt(d.localPosition.dx, slotW, count)
+                          .round()
+                          .clamp(0, count - 1);
+                      if (i != widget.index) widget.onSelect(i);
+                    },
+                    onHorizontalDragStart: (d) =>
+                        _grab(d.localPosition.dx, slotW, count),
+                    onHorizontalDragUpdate: (d) =>
+                        _move(d.localPosition.dx, slotW, count),
+                    onHorizontalDragEnd: (_) => _release(count),
+                    onHorizontalDragCancel: () => _release(count),
+                    // Press-and-hold, then drag: the long-press family keeps the
+                    // gesture alive when the finger goes down and stays put,
+                    // which the drag recognisers alone would never claim.
+                    onLongPressStart: (d) =>
+                        _grab(d.localPosition.dx, slotW, count),
+                    onLongPressMoveUpdate: (d) =>
+                        _move(d.localPosition.dx, slotW, count),
+                    onLongPressEnd: (_) => _release(count),
+                    onLongPressCancel: () => _release(count),
+                    child: Stack(
+                      children: [
+                        // Visible capsule, positioned identically to the lens so
+                        // the highlight and the refraction stay locked together.
+                        Positioned(
+                          left: (pos + 0.5) * slotW - pillW / 2,
+                          top: (h - pillH) / 2,
+                          width: pillW,
+                          height: pillH,
+                          child: _Indicator(held: _dragging),
+                        ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                    color: Colors.white.withOpacity(0.07)),
+                              ),
+                              child: Row(
+                                children: [
+                                  for (var i = 0; i < count; i++)
+                                    Expanded(
+                                      child: _Tab(
+                                        icon: _GlassTabBar.items[i].$1,
+                                        activeIcon: _GlassTabBar.items[i].$2,
+                                        label: _GlassTabBar.items[i].$3,
+                                        // While dragging, highlight whatever the
+                                        // capsule is over rather than the tab
+                                        // that is still committed — the icon and
+                                        // the glass must not disagree.
+                                        selected: (_dragging
+                                                ? pos.round()
+                                                : widget.index) ==
+                                            i,
+                                        compact: !widget.expanded,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },
@@ -342,34 +449,61 @@ class _GlassTabBarState extends State<_GlassTabBar>
 /// so this only needs to add the tint and a hairline edge. Painting a strong
 /// fill here would hide the lensing underneath it.
 class _Indicator extends StatelessWidget {
-  const _Indicator();
+  final bool held;
+  const _Indicator({this.held = false});
 
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: DecoratedBox(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              AppColors.gold.withOpacity(0.20),
-              AppColors.gold.withOpacity(0.09),
-            ],
+            colors: held
+                ? [
+                    AppColors.gold.withOpacity(0.30),
+                    AppColors.gold.withOpacity(0.14),
+                  ]
+                : [
+                    AppColors.gold.withOpacity(0.20),
+                    AppColors.gold.withOpacity(0.09),
+                  ],
           ),
-          border: Border.all(color: AppColors.gold.withOpacity(0.30)),
+          border: Border.all(
+            color: AppColors.gold.withOpacity(held ? 0.48 : 0.30),
+          ),
+          // Only while held — a resting indicator with a glow reads as a
+          // notification rather than as a control.
+          boxShadow: held
+              ? [
+                  BoxShadow(
+                    color: AppColors.gold.withOpacity(0.22),
+                    blurRadius: 14,
+                    spreadRadius: -2,
+                  ),
+                ]
+              : null,
         ),
       ),
     );
   }
 }
 
+/// Icon and label only.
+///
+/// Deliberately has no gesture handling and no background of its own. Both used
+/// to live here: the pill was a per-tab AnimatedContainer cross-fading its
+/// colour, so nothing ever travelled, and per-tab tap detectors made a drag
+/// across tabs impossible — the gesture would be claimed by whichever child it
+/// started in and die at that child's boundary. The bar owns both now.
 class _Tab extends StatelessWidget {
   final IconData icon, activeIcon;
   final String label;
   final bool selected, compact;
-  final VoidCallback onTap;
 
   const _Tab({
     required this.icon,
@@ -377,23 +511,15 @@ class _Tab extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.compact,
-    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = selected ? AppColors.gold : AppColors.textMuted;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      // No background here any more. The selected pill used to be a per-tab
-      // AnimatedContainer that cross-faded its colour — the old one fading out
-      // while the new one faded in — so nothing ever travelled. A single
-      // indicator now slides in _GlassTabBarState.
-      child: Padding(
-        padding: const EdgeInsets.all(5),
-        child: Column(
+    return Padding(
+      padding: const EdgeInsets.all(5),
+      child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(selected ? activeIcon : icon, size: compact ? 19 : 20, color: color),
@@ -417,7 +543,6 @@ class _Tab extends StatelessWidget {
                     ),
             ),
           ],
-        ),
       ),
     );
   }
