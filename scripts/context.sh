@@ -121,6 +121,19 @@ read_pass() {
   read -r -s PASS
   printf '\n' >&2
   [ -n "$PASS" ] || die "empty passphrase"
+
+  # Confirm when sealing, never when opening. A typo while packing produces a
+  # bundle locked with a passphrase nobody knows, and it stays undiscovered
+  # until someone tries to open it on another machine — by which point the
+  # only copy of the context is inside it. Opening needs no confirmation: a
+  # wrong passphrase there simply fails and costs nothing.
+  if [ "${CONFIRM_PASS:-0}" = 1 ]; then
+    printf 'Confirm    : ' >&2
+    local again
+    read -r -s again
+    printf '\n' >&2
+    [ "$PASS" = "$again" ] || die "passphrases do not match — nothing was written"
+  fi
 }
 
 cmd_status() {
@@ -221,7 +234,7 @@ cmd_pack() {
 
   [ "$added" -gt 0 ] || die "nothing to pack"
 
-  read_pass
+  CONFIRM_PASS=1 read_pass
   tar -czf - -C "$staging" . \
     | gpg --batch --yes --symmetric --cipher-algo AES256 \
           --pinentry-mode loopback --passphrase-fd 3 \
