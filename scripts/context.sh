@@ -44,8 +44,38 @@ BUNDLE="$ROOT/context.enc"
 # The Claude config directory holds the memory files. Honour CLAUDE_CONFIG_DIR
 # if it has been redirected, otherwise fall back to the default location.
 CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-PROJECT_KEY="c--Users-Asus--gemini-antigravity-scratch-New-folder"
-MEM="$CFG/projects/$PROJECT_KEY/memory"
+# Locate the Claude memory directory for THIS project.
+#
+# Claude Code names each project folder after the working directory path with
+# non-alphanumeric characters replaced by "-", so the name embeds the username
+# and the full path. Hardcoding it works on exactly one machine: on any other,
+# the restore would write into a directory Claude never reads, and would do so
+# without any error — the worst kind of failure for a migration script.
+#
+# So derive it. Match on the project folder's own name, which travels with the
+# repository, and fall back to creating the conventional path if no existing
+# project directory matches.
+resolve_mem() {
+  local slug
+  slug="$(basename "$ROOT" | tr -c '[:alnum:]' '-')"
+  slug="${slug%-}"
+
+  local d
+  for d in "$CFG"/projects/*/; do
+    [ -d "$d" ] || continue
+    case "$(basename "$d")" in
+      *"$slug") echo "${d%/}/memory"; return 0 ;;
+    esac
+  done
+
+  # Nothing matched — first run on this machine. Use the path Claude would
+  # itself derive, so the directory is already correct once a session starts.
+  local win
+  win="$(cd "$ROOT" && pwd -W 2>/dev/null || pwd)"
+  echo "$CFG/projects/$(printf '%s' "$win" | tr -c '[:alnum:]' '-')/memory"
+}
+
+MEM="$(resolve_mem)"
 
 die() { echo "error: $*" >&2; exit 1; }
 
