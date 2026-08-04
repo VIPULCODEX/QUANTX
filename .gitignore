@@ -31,6 +31,13 @@ Thumbs.db
 # github.com/VIPULCODEX/phishsense and should be consumed from there.
 project/
 
+# ─── Encrypted context sync ───────────────────────
+# These travel between machines inside context.enc (AES-256) rather than in
+# plaintext. context.enc itself IS committed — it is unreadable without the
+# passphrase, including to GitHub. See scripts/context.sh.
+CLAUDE.md
+ARCHITECTURE.md
+
 # ─── Local-only docs (keep locally, not on GitHub) ─
 PROJECT_LOG.txt
 README.md
