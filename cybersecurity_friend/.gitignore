@@ -1,0 +1,28 @@
+# Nested deliberately, and load-bearing for deployment safety.
+#
+# hf_sync.yml runs `git init` and `git add .` INSIDE this directory to push the
+# backend to a Hugging Face Space. That creates a fresh repository rooted here,
+# so the .gitignore at the project root does not apply to it — its rules live
+# outside the new repo entirely.
+#
+# Without this file, anything sitting in this folder at sync time is force-
+# pushed to a public Space. Today that does not happen only because CI checks
+# out a clean tree. This makes it true by construction instead of by luck.
+#
+# Secrets belong in the Space's own Secrets settings, where they arrive as
+# environment variables. config.py reads through os.getenv(), so the same code
+# works with a local .env here and with injected secrets there.
+
+# ─── Never deploy secrets ─────────────────────────
+.env
+.passphrase
+*.pem
+*.key
+
+# ─── Build artefacts and local state ──────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+faiss_index/
