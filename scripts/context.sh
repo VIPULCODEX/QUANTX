@@ -8,10 +8,22 @@
 # it travels as a single AES-256 blob that only holders of the passphrase can
 # read. GitHub stores it; GitHub cannot read it.
 #
+#   ./scripts/context.sh status               who holds the baton
 #   ./scripts/context.sh pack                 bundle + encrypt -> context.enc
 #   ./scripts/context.sh unpack               decrypt + restore
 #   ./scripts/context.sh pack --with-secrets  also include .env  (SEE WARNING)
 #   ./scripts/context.sh list                 show what a bundle contains
+#
+# BATON DISCIPLINE
+#   context.enc is a single AES blob, so git cannot merge two versions of it —
+#   a conflict forces you to discard one side whole, with no way to see what
+#   you are throwing away. The workflow is therefore strictly one machine at a
+#   time: pack and push before you leave, pull and unpack when you arrive.
+#
+#   Guards below make forgetting loud rather than silent. `pack` refuses when
+#   the remote's bundle differs from yours, and `unpack` refuses when your
+#   local files are newer than the bundle about to overwrite them. Both take
+#   --force if you have decided which side wins.
 #
 # HONEST LIMITS
 #   * "Only my devices" is achievable. "Only this device" is not — whatever
@@ -39,6 +51,39 @@ die() { echo "error: $*" >&2; exit 1; }
 
 command -v gpg >/dev/null || die "gpg not found (Git Bash ships one; check PATH)"
 
+# ── Baton guards ────────────────────────────────────────────────────────────
+#
+# The question these answer is not "is git behind" but the narrower "does the
+# remote hold a DIFFERENT bundle than mine". Ordinary commits to code move HEAD
+# without touching context.enc, and blocking on those would train you to reach
+# for --force, which defeats the guard entirely.
+
+BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+
+# Populates REMOTE_STATE with one of: offline, no-upstream, same, differs
+probe_remote() {
+  REMOTE_STATE="offline"
+  [ -n "$BRANCH" ] || return 0
+  git -C "$ROOT" fetch --quiet origin "$BRANCH" 2>/dev/null || return 0
+  git -C "$ROOT" rev-parse --verify --quiet "origin/$BRANCH" >/dev/null 2>&1 || {
+    REMOTE_STATE="no-upstream"; return 0; }
+  if git -C "$ROOT" diff --quiet HEAD "origin/$BRANCH" -- context.enc 2>/dev/null; then
+    REMOTE_STATE="same"
+  else
+    REMOTE_STATE="differs"
+  fi
+}
+
+# True when a tracked plaintext file has been edited since the bundle was made,
+# i.e. there is local work the bundle does not contain.
+local_is_newer() {
+  [ -f "$BUNDLE" ] || return 0
+  for f in CLAUDE.md ARCHITECTURE.md; do
+    [ -f "$ROOT/$f" ] && [ "$ROOT/$f" -nt "$BUNDLE" ] && return 0
+  done
+  return 1
+}
+
 read_pass() {
   # --pinentry-mode loopback keeps gpg from trying to open a GUI prompt, which
   # is unreliable under Git Bash on Windows.
@@ -48,9 +93,58 @@ read_pass() {
   [ -n "$PASS" ] || die "empty passphrase"
 }
 
+cmd_status() {
+  probe_remote
+  echo "branch        : ${BRANCH:-<none>}"
+
+  if [ -f "$BUNDLE" ]; then
+    echo "context.enc   : $(du -h "$BUNDLE" | cut -f1), packed $(date -r "$BUNDLE" '+%Y-%m-%d %H:%M')"
+  else
+    echo "context.enc   : absent"
+  fi
+
+  case "$REMOTE_STATE" in
+    offline)     echo "remote        : unreachable — cannot tell who holds the baton" ;;
+    no-upstream) echo "remote        : no upstream branch" ;;
+    same)        echo "remote        : bundle matches yours" ;;
+    differs)     echo "remote        : DIFFERENT bundle upstream" ;;
+  esac
+
+  echo ""
+  if [ "$REMOTE_STATE" = "differs" ]; then
+    echo "  The other machine holds the baton."
+    echo "  ->  git pull  &&  ./scripts/context.sh unpack"
+  elif local_is_newer; then
+    echo "  You hold the baton, with unpacked local edits."
+    echo "  ->  ./scripts/context.sh pack  &&  git add context.enc && git commit && git push"
+  else
+    echo "  You hold the baton. Nothing to pack."
+  fi
+}
+
 cmd_pack() {
-  local with_secrets=0
-  [ "${1:-}" = "--with-secrets" ] && with_secrets=1
+  local with_secrets=0 force=0
+  for a in "$@"; do
+    case "$a" in
+      --with-secrets) with_secrets=1 ;;
+      --force)        force=1 ;;
+    esac
+  done
+
+  probe_remote
+  if [ "$REMOTE_STATE" = "differs" ] && [ "$force" = 0 ]; then
+    echo "refusing to pack: the remote holds a different context.enc." >&2
+    echo "" >&2
+    echo "  The other machine packed since you last pulled. Packing now and" >&2
+    echo "  pushing would collide, and the blob cannot be merged — resolving" >&2
+    echo "  it means discarding one side entirely, unseen." >&2
+    echo "" >&2
+    echo "  Take the baton first:   git pull && ./scripts/context.sh unpack" >&2
+    echo "  Or overrule this with:  ./scripts/context.sh pack --force" >&2
+    exit 1
+  fi
+  [ "$REMOTE_STATE" = "offline" ] && \
+    echo "  note: remote unreachable, packing without a baton check" >&2
 
   local staging
   staging="$(mktemp -d)"
@@ -109,7 +203,23 @@ cmd_pack() {
 }
 
 cmd_unpack() {
+  local force=0
+  [ "${1:-}" = "--force" ] && force=1
+
   [ -f "$BUNDLE" ] || die "context.enc not found — git pull first"
+
+  if local_is_newer && [ "$force" = 0 ]; then
+    echo "refusing to unpack: your local files are newer than context.enc." >&2
+    echo "" >&2
+    echo "  You edited CLAUDE.md or ARCHITECTURE.md and never packed. Unpacking" >&2
+    echo "  overwrites them in place, so those edits would be gone with no copy" >&2
+    echo "  anywhere — they are gitignored, so git cannot recover them either." >&2
+    echo "" >&2
+    echo "  Keep your edits:      ./scripts/context.sh pack" >&2
+    echo "  Or discard them with: ./scripts/context.sh unpack --force" >&2
+    exit 1
+  fi
+
   read_pass
 
   local staging
@@ -126,6 +236,12 @@ cmd_unpack() {
   for f in CLAUDE.md ARCHITECTURE.md; do
     if [ -f "$staging/$f" ]; then
       cp "$staging/$f" "$ROOT/$f"
+      # Stamp the restored file with the bundle's own mtime. cp would otherwise
+      # set it to now, making every freshly unpacked file look newer than the
+      # bundle it came from — so the "you have unedited local work" guard would
+      # fire immediately after every unpack. A guard that always cries wolf
+      # teaches you to pass --force, which is worse than having no guard.
+      touch -r "$BUNDLE" "$ROOT/$f"
       echo "  -> $f"
     fi
   done
@@ -153,11 +269,12 @@ cmd_list() {
 }
 
 case "${1:-}" in
-  pack)   shift; cmd_pack "${1:-}" ;;
-  unpack) cmd_unpack ;;
+  status) cmd_status ;;
+  pack)   shift; cmd_pack "$@" ;;
+  unpack) shift; cmd_unpack "${1:-}" ;;
   list)   cmd_list ;;
   *)
-    sed -n '3,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac
