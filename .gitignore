@@ -55,3 +55,6 @@ cyber_intel_app/.packages
 # dependencies, which is a debugging nightmare that only shows up as "works on
 # my machine". Commit it after the first `flutter pub get`.
 
+
+# ─── Passphrase file for non-interactive packing (never commit) ───
+.passphrase

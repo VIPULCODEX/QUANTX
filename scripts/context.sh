@@ -115,6 +115,21 @@ local_is_newer() {
 }
 
 read_pass() {
+  # A passphrase file exists for non-interactive callers: automation, and any
+  # agent driving this script whose shell has no terminal to prompt on. The
+  # file is its own confirmation — you can read back what you wrote — so the
+  # double-entry check below is skipped in this mode.
+  #
+  # It is a deliberate trade: a passphrase briefly on disk in exchange for not
+  # having to type it into a prompt. Delete the file afterwards; `pack` prints
+  # a reminder, and .passphrase is gitignored so it cannot be committed.
+  if [ -n "${PASSFILE:-}" ]; then
+    [ -f "$PASSFILE" ] || die "passphrase file not found: $PASSFILE"
+    PASS="$(head -n 1 "$PASSFILE" | tr -d '\r\n')"
+    [ -n "$PASS" ] || die "passphrase file is empty: $PASSFILE"
+    return 0
+  fi
+
   # --pinentry-mode loopback keeps gpg from trying to open a GUI prompt, which
   # is unreliable under Git Bash on Windows.
   printf 'Passphrase: ' >&2
@@ -167,11 +182,14 @@ cmd_status() {
 
 cmd_pack() {
   local with_secrets=0 force=0
+  local prev=""
   for a in "$@"; do
+    case "$prev" in --passphrase-file) PASSFILE="$a" ;; esac
     case "$a" in
       --with-secrets) with_secrets=1 ;;
       --force)        force=1 ;;
     esac
+    prev="$a"
   done
 
   probe_remote
@@ -243,6 +261,11 @@ cmd_pack() {
   echo ""
   echo "packed -> context.enc ($(du -h "$BUNDLE" | cut -f1))"
   echo "commit it with: git add context.enc && git commit -m 'chore: sync context'"
+  if [ -n "${PASSFILE:-}" ]; then
+    echo ""
+    echo "  Now delete the passphrase file:  rm '$PASSFILE'"
+    echo "  It is gitignored, but it is still your passphrase sitting on disk."
+  fi
 }
 
 cmd_unpack() {
