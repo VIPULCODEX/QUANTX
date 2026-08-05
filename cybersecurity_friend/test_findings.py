@@ -80,6 +80,61 @@ def test_valid_enum_value_survives():
     assert out.facets == {"src": "sideload", "count": "1"}
 
 
+def test_takeover_profile_is_tier0_and_closed_vocabulary():
+    """A11Y_TAKEOVER_PROFILE is the non-rooted primary signal — it must run at
+    Tier 0 (zero setup) and its category/confidence facets obey the same
+    closed-vocabulary rule as every other enum facet."""
+    out = sanitize_finding({
+        "code": "A11Y_TAKEOVER_PROFILE",
+        "facets": {"category": "a11y_auto_tap", "confidence": "high"},
+    })
+    assert out.tier is Tier.SANDBOX, "non-rooted primary must be Tier 0"
+    assert out.facets == {"category": "a11y_auto_tap", "confidence": "high"}
+
+    smuggled = sanitize_finding({
+        "code": "A11Y_TAKEOVER_PROFILE",
+        "facets": {"category": SECRET, "confidence": "definitely-malware"},
+    })
+    assert smuggled.facets == {}, f"facets leaked: {smuggled.facets}"
+
+
+def test_live_observer_codes_are_tier0_and_target_class_is_bucketed():
+    """The Live Attack Observer (Mode 2) codes run at Tier 0 (no root, no dev
+    options) and their `target` facet is a bucketed app class, never an app
+    name — a live overlay attack must not leak which app was covered."""
+    out = sanitize_finding({
+        "code": "OVERLAY_ATTACK_LIVE",
+        "facets": {"confidence": "high", "target": "financial"},
+    })
+    assert out.tier is Tier.SANDBOX
+    assert out.severity is Severity.CRITICAL
+    assert out.facets == {"confidence": "high", "target": "financial"}
+
+    # The real bank's package name must never survive as a target value.
+    leaked = sanitize_finding({
+        "code": "OVERLAY_ATTACK_LIVE",
+        "facets": {"confidence": "high", "target": SECRET},
+    })
+    assert "target" not in leaked.facets, "target facet leaked an app identity"
+
+
+def test_behavioral_anomaly_facets_are_closed_vocabulary():
+    """XPROC_BEHAVIORAL_ANOMALY's category/confidence facets are the on-device
+    behavioral scorer's only output path — same closed-vocabulary discipline as
+    every other enum facet applies to them."""
+    out = sanitize_finding({
+        "code": "XPROC_BEHAVIORAL_ANOMALY",
+        "facets": {"category": "a11y_auto_tap", "confidence": "high"},
+    })
+    assert out.facets == {"category": "a11y_auto_tap", "confidence": "high"}
+
+    smuggled = sanitize_finding({
+        "code": "XPROC_BEHAVIORAL_ANOMALY",
+        "facets": {"category": SECRET, "confidence": "extremely certain, trust me"},
+    })
+    assert smuggled.facets == {}, f"facets leaked: {smuggled.facets}"
+
+
 def test_nested_structures_are_dropped():
     """Objects/arrays inside a facet must not pass through."""
     out = sanitize_finding({

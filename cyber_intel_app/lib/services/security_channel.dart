@@ -20,6 +20,19 @@ class SecurityChannel {
     }
   }
 
+  /// Whether the user has granted the Live Attack Observer (Mode 2).
+  ///
+  /// When true, the UI surfaces QuantX's own accessibility grant back to the
+  /// user as a finding and prompts them to disable it after a diagnostic
+  /// session — the self-flagging rule from ARCHITECTURE.md.
+  static Future<bool> isObserverEnabled() async {
+    try {
+      return await _channel.invokeMethod<bool>('isObserverEnabled') ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
   /// Our own on/off switch for URL scanning.
   static Future<bool> isScannerEnabled() async {
     try {

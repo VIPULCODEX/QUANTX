@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">QuantX AI</string>
     <string name="accessibility_service_description">QuantX scans websites you visit in real-time to detect phishing, scams, and malicious URLs. When a threat is detected, you receive an instant alert. No personal browsing data is stored or transmitted — only the current URL is analyzed.</string>
+    <string name="observer_service_description">QuantX Live Attack Observer. With your consent, this watches for account-takeover attacks in progress — automated taps driving your apps, and phishing overlays drawn over them — the same techniques banking trojans use. It reads only behavioral signals on-device; screen contents are never stored or transmitted. This is a powerful permission: enable it only for a diagnostic session and turn it off afterwards. QuantX reports its own use of it as a finding.</string>
 </resources>

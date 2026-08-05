@@ -67,6 +67,9 @@ class MainActivity : FlutterActivity() {
                     "isAccessibilityServiceEnabled" -> {
                         result.success(isAccessibilityServiceEnabled())
                     }
+                    "isObserverEnabled" -> {
+                        result.success(isObserverEnabled())
+                    }
                     "runTier0Scan" -> {
                         try {
                             result.success(SecurityScanner.scan(applicationContext))
@@ -218,6 +221,23 @@ class MainActivity : FlutterActivity() {
      */
     private fun isAccessibilityServiceEnabled(): Boolean {
         val expected = "$packageName/$packageName.QuantXScannerService"
+        val enabled = android.provider.Settings.Secure.getString(
+            contentResolver,
+            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+    }
+
+    /**
+     * Whether the user has granted the Live Attack Observer (Mode 2).
+     *
+     * The UI uses this to surface QuantX's own accessibility grant back to the
+     * user as a finding and prompt them to disable it after a diagnostic
+     * session — the self-flagging rule that keeps the tool honest about using
+     * the exact permission it warns about.
+     */
+    private fun isObserverEnabled(): Boolean {
+        val expected = "$packageName/$packageName.LiveAttackObserver"
         val enabled = android.provider.Settings.Secure.getString(
             contentResolver,
             android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES

@@ -1,0 +1,18 @@
+{
+  "sample": "a11y_auto_tap",
+  "category": "a11y_auto_tap",
+  "real_world_families": ["Anatsa", "Octo", "Cerberus", "Xenomorph"],
+  "technique": {
+    "entry_point": "com.quantx.repipeline.a11ytap.AutoTapService#onAccessibilityEvent",
+    "api_sequence": [
+      "AccessibilityService.onAccessibilityEvent",
+      "AccessibilityService.getRootInActiveWindow",
+      "AccessibilityNodeInfo tree walk matching marker text",
+      "AccessibilityService.dispatchGesture (synthetic tap)"
+    ],
+    "trigger": "a node whose text/contentDescription contains the literal marker 'RE_SAMPLE_TARGET'",
+    "payload_behavior": "dispatches one synthetic tap gesture at the marked node's on-screen bounds",
+    "network_activity": "none"
+  },
+  "notes": "Marker string is unique to this harness so the service can never fire against a real app by accident."
+}

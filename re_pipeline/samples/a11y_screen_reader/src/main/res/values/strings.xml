@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">RE Sample: A11y Screen Reader</string>
+    <string name="a11y_service_description">Lab TTP-reproduction sample. Reads on-screen node text into a local, on-device log only — nothing leaves the device. Reproduces the accessibility screen-reading technique used by Anatsa/Octo/Cerberus/Xenomorph, for the QuantX agentic-RE research pipeline. Not for distribution.</string>
+</resources>

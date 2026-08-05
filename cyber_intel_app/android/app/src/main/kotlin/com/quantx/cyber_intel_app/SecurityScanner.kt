@@ -78,6 +78,13 @@ object SecurityScanner {
         detectAccessibility(ctx)?.let { findings.add(it) }
         detectNotificationListeners(ctx)?.let { findings.add(it) }
 
+        // Mode 1 — static capability-profile match (non-rooted, zero permission).
+        TakeoverProfile.scan(ctx)?.let { findings.add(it) }
+
+        // Mode 2 — drain anything the Live Attack Observer caught in real time
+        // since the last scan. Emitted through the same gate as everything else.
+        findings.addAll(ObserverBuffer.drain())
+
         return findings
     }
 

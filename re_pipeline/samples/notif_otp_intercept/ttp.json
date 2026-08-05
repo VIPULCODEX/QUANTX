@@ -1,0 +1,17 @@
+{
+  "sample": "notif_otp_intercept",
+  "category": "notif_intercept",
+  "real_world_families": ["Anatsa", "Octo", "Cerberus", "Xenomorph"],
+  "technique": {
+    "entry_point": "com.quantx.repipeline.otpintercept.OtpInterceptListener#onNotificationPosted",
+    "api_sequence": [
+      "NotificationListenerService.onNotificationPosted",
+      "regex match on notification text against a generic N-digit pattern",
+      "NotificationListenerService.cancelNotification"
+    ],
+    "trigger": "any posted notification whose text contains a 4-8 digit run",
+    "payload_behavior": "logs a boolean match event only (never the matched digits) and dismisses the notification",
+    "network_activity": "none"
+  },
+  "notes": "Digit pattern is generic on purpose — not tied to any real bank's OTP format."
+}

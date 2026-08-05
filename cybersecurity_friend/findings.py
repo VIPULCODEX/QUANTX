@@ -109,6 +109,16 @@ _SRC = FacetSpec("enum", frozenset({"play", "sideload", "system", "unknown"}))
 _HOOK_FRAMEWORK = FacetSpec("enum", frozenset({"frida", "xposed", "lsposed", "unknown"}))
 _INTEGRITY = FacetSpec("enum", frozenset({"strong", "device", "basic", "none"}))
 _ROOT_METHOD = FacetSpec("enum", frozenset({"magisk", "other", "unknown"}))
+# Categories are the closed taxonomy produced by the offline agentic-RE pipeline
+# (re_pipeline/) — one label per reproduced TTP, plus "unknown" for anything the
+# on-device scorer flags outside that taxonomy. Never a free-text description.
+_BEHAVIOR_CATEGORY = FacetSpec("enum", frozenset({
+    "a11y_screen_read", "a11y_auto_tap", "overlay_phish", "notif_intercept", "unknown",
+}))
+_CONFIDENCE = FacetSpec("enum", frozenset({"low", "medium", "high"}))
+# Bucketed *class* of the app an attack targeted — never the app's identity.
+# Lets the advisor say "protect your banking app" without a package name.
+_TARGET_CLASS = FacetSpec("enum", frozenset({"financial", "messaging", "other"}))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -163,6 +173,37 @@ REGISTRY: Dict[str, CodeSpec] = {
     "EMULATOR_DETECTED": CodeSpec(
         Tier.SANDBOX, Severity.LOW,
         "App is running on an emulator",
+    ),
+    "A11Y_TAKEOVER_PROFILE": CodeSpec(
+        Tier.SANDBOX, Severity.HIGH,
+        "An accessibility/notification service's declared capabilities match a "
+        "known account-takeover technique",
+        {"category": _BEHAVIOR_CATEGORY, "confidence": _CONFIDENCE},
+    ),
+
+    # ── Tier 0 — Live Attack Observer (opt-in accessibility grant; §Mode 2) ───
+    # Dynamic, cross-app, non-root: caught from the live system-wide event
+    # stream, not by touching another process. QuantX's own a11y grant is
+    # itself reported (A11Y_UNTRUSTED_SERVICE-style self-flagging).
+    "OVERLAY_ATTACK_LIVE": CodeSpec(
+        Tier.SANDBOX, Severity.CRITICAL,
+        "An untrusted overlay was drawn over a sensitive app in real time",
+        {"confidence": _CONFIDENCE, "target": _TARGET_CLASS},
+    ),
+    "A11Y_AUTOMATION_ANOMALY": CodeSpec(
+        Tier.SANDBOX, Severity.HIGH,
+        "Non-human automation was seen driving a sensitive app",
+        {"category": _BEHAVIOR_CATEGORY, "confidence": _CONFIDENCE, "target": _TARGET_CLASS},
+    ),
+    "NOTIF_HIJACK_LIVE": CodeSpec(
+        Tier.SANDBOX, Severity.HIGH,
+        "A one-time-code notification was intercepted by a background listener",
+        {"confidence": _CONFIDENCE},
+    ),
+    "NET_APP_EGRESS_ANOMALY": CodeSpec(
+        Tier.SANDBOX, Severity.MEDIUM,
+        "An app sent an unusual burst of data",
+        {"confidence": _CONFIDENCE},
     ),
 
     # ── Tier 1 — Shizuku ─────────────────────────────────────────────────────
@@ -233,6 +274,11 @@ REGISTRY: Dict[str, CodeSpec] = {
     "DM_VERITY_DISABLED": CodeSpec(
         Tier.ROOT, Severity.HIGH,
         "Verified boot (dm-verity) is disabled",
+    ),
+    "XPROC_BEHAVIORAL_ANOMALY": CodeSpec(
+        Tier.ROOT, Severity.HIGH,
+        "Another app is behaving like known account-takeover malware",
+        {"category": _BEHAVIOR_CATEGORY, "confidence": _CONFIDENCE},
     ),
 }
 
@@ -473,6 +519,89 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
         "steps": [
             "Set SELinux back to enforcing if you changed it deliberately.",
             "If you did not change it, treat the device as compromised.",
+        ],
+    },
+    "A11Y_TAKEOVER_PROFILE": {
+        "why": "An app that holds accessibility or notification access declares "
+               "the exact capabilities banking trojans use to take over an "
+               "account — reading the whole screen, tapping on your behalf, "
+               "drawing over other apps, or intercepting one-time codes. This "
+               "is stronger than 'an untrusted app has accessibility': the app's "
+               "own manifest matches a known attack profile. A legitimate tool "
+               "(a screen reader, a password manager) can look similar, so "
+               "confirm you installed it on purpose before trusting it.",
+        "steps": [
+            "Do not enter banking or payment credentials until you have checked this.",
+            "Open Settings > Accessibility > Downloaded apps and Settings > "
+            "Notifications > Device & app notifications.",
+            "If you do not recognise the flagged app or did not enable it "
+            "deliberately, turn its access off and uninstall it.",
+            "If it is a tool you rely on (screen reader, automation, password "
+            "manager), this is expected — leave it on.",
+        ],
+    },
+    "OVERLAY_ATTACK_LIVE": {
+        "why": "Right now, an untrusted app is drawing a screen on top of a "
+               "sensitive app you were using. This is the tapjacking technique: "
+               "what you see and tap may belong to the attacker's fake screen, "
+               "not the real app underneath. This was caught as it happened, "
+               "not merely as a risky setting.",
+        "steps": [
+            "Stop entering anything — do not type passwords, PINs, or codes now.",
+            "Leave the current app: press Home, then reopen the real app fresh.",
+            "Open Settings > Apps > Special app access > Display over other apps "
+            "and turn it off for anything you do not recognise.",
+            "Uninstall the unrecognised app, then check your account activity.",
+        ],
+    },
+    "A11Y_AUTOMATION_ANOMALY": {
+        "why": "Something was operating a sensitive app at a speed and rhythm a "
+               "human does not — automated taps and navigation, the way a "
+               "banking trojan drives a transfer on the victim's behalf. This is "
+               "a live-behavior signal, observed while the app was in use.",
+        "steps": [
+            "Take control: interact with the phone to interrupt the automation.",
+            "Open Settings > Accessibility and turn off any service you did not "
+            "deliberately enable.",
+            "Uninstall the app behind it and review recent account transactions.",
+            "If you cannot regain control, power the device off.",
+        ],
+    },
+    "NOTIF_HIJACK_LIVE": {
+        "why": "A one-time security code arrived and was cleared away by a "
+               "background app before you could act on it — the interception "
+               "step that lets an attacker complete a login or transfer.",
+        "steps": [
+            "Assume an account is under active attack: change that account's "
+            "password from a different, trusted device now.",
+            "Open Settings > Notifications > Device & app notifications and "
+            "revoke notification access for anything unrecognised.",
+            "Uninstall the app that intercepted it and review recent activity.",
+        ],
+    },
+    "NET_APP_EGRESS_ANOMALY": {
+        "why": "An app sent out an unusually large burst of data. On its own "
+               "this can be normal (a backup, an upload), but paired with other "
+               "warnings it can mean information is being exfiltrated.",
+        "steps": [
+            "If you were not uploading or backing up, note which app it was.",
+            "Restrict its background data, or uninstall it if unrecognised.",
+            "Re-scan; if other warnings accompany this, treat it as urgent.",
+        ],
+    },
+    "XPROC_BEHAVIORAL_ANOMALY": {
+        "why": "An on-device behavioral monitor saw another app's live syscall "
+               "pattern match known account-takeover techniques — automating taps "
+               "through accessibility access, drawing phishing overlays, or "
+               "intercepting one-time codes. This is a live-behavior signal, not "
+               "just a static permission or file check.",
+        "steps": [
+            "Do not enter banking or payment credentials on this device right now.",
+            "Open Settings > Accessibility and Settings > Notifications and revoke "
+            "access for anything unfamiliar.",
+            "Review recently installed apps and remove anything you do not recognise.",
+            "If the warning persists after removing suspicious apps, treat the "
+            "device as compromised and avoid sensitive transactions until it is reset.",
         ],
     },
 }

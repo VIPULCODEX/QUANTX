@@ -1,0 +1,18 @@
+{
+  "sample": "a11y_screen_reader",
+  "category": "a11y_screen_read",
+  "real_world_families": ["Anatsa", "Octo", "Cerberus", "Xenomorph"],
+  "technique": {
+    "entry_point": "com.quantx.repipeline.a11yreader.ScreenReaderService#onAccessibilityEvent",
+    "api_sequence": [
+      "AccessibilityService.onAccessibilityEvent",
+      "AccessibilityService.getRootInActiveWindow",
+      "AccessibilityNodeInfo.getChild (recursive tree walk)",
+      "AccessibilityNodeInfo.getText"
+    ],
+    "trigger": "any window content/state change event",
+    "payload_behavior": "concatenates all visible node text and appends it to a local file (filesDir/screen_read_log.txt); nothing is sent over the network",
+    "network_activity": "none"
+  },
+  "notes": "Ground truth recorded before any RE session. The agent's derived trace is scored against this file, never shown it first."
+}

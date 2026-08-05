@@ -1,5 +1,16 @@
 # ─── Secrets ──────────────────────────────
 .env
+*.env
+.env.*
+# The backend keys live in a file literally named `env` (no leading dot), so the
+# `.env` pattern above does NOT catch it and the `env/` dir pattern below only
+# matches directories. Ignore the exact path so the plaintext GROQ / NewsAPI
+# keys can never be staged by accident.
+cybersecurity_friend/env
+# Android signing material, if a release key is ever added.
+*.jks
+*.keystore
+google-services.json
 
 # ─── Python ──────────────────────────────
 __pycache__/

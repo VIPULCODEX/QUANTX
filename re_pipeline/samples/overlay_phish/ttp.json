@@ -1,0 +1,17 @@
+{
+  "sample": "overlay_phish",
+  "category": "overlay_phish",
+  "real_world_families": ["Anatsa", "Octo", "Cerberus", "Xenomorph"],
+  "technique": {
+    "entry_point": "com.quantx.repipeline.overlayphish.PhishOverlayService#showOverlay",
+    "api_sequence": [
+      "WindowManager.addView with TYPE_APPLICATION_OVERLAY",
+      "static fake login form rendered",
+      "Button.onClick logs a boolean submit event only"
+    ],
+    "trigger": "user taps 'Start Overlay' after granting SYSTEM_ALERT_WINDOW",
+    "payload_behavior": "draws a translucent panel over whatever is currently on screen; deliberately never reads EditText contents",
+    "network_activity": "none"
+  },
+  "notes": "Field contents are never read, even locally — the sample cannot become an accidental credential harvester."
+}

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">RE Sample: A11y Auto Tap</string>
+    <string name="a11y_service_description">Lab TTP-reproduction sample. Dispatches one synthetic tap gesture only at a node marked with the literal string "RE_SAMPLE_TARGET" — a marker only this harness ever shows, never a real app. Reproduces the accessibility auto-tap technique used by Anatsa/Octo/Cerberus/Xenomorph, for the QuantX agentic-RE research pipeline. Not for distribution.</string>
+</resources>

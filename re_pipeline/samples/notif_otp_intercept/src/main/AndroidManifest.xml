@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  QuantX agentic-RE research sample — lab-only TTP reproduction.
+  Reproduces the notification/OTP-interception primitive used by the
+  Anatsa/Octo/Cerberus/Xenomorph banking-trojan lineage to complete a
+  takeover after auto-tapping through a transfer flow. See ../../../ttp.json
+  for ground truth and README.md at the repo root for scope and safety notes.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:icon="@android:drawable/ic_dialog_alert">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".OtpInterceptListener"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+    </application>
+</manifest>

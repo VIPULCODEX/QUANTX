@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    QuantX Live Attack Observer (Mode 2) accessibility service config.
+
+    Distinct from quantx_accessibility_service.xml (the URL scanner): this one
+    watches the WHOLE device (no packageNames restriction) so it can see an
+    attack against any app, and requests flagRetrieveInteractiveWindows so it
+    can call getWindows() for live overlay detection. It deliberately does NOT
+    request canPerformGestures — the observer never taps on the user's behalf;
+    it only watches. See LiveAttackObserver.kt.
+-->
+<accessibility-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/observer_service_description"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged|typeViewClicked|typeViewScrolled|typeViewFocused"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="100"
+    android:settingsActivity=".MainActivity" />
