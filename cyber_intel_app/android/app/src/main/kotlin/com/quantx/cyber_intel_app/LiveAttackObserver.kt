@@ -80,6 +80,16 @@ class LiveAttackObserver : AccessibilityService() {
         AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
     )
 
+    // Android has no ApplicationInfo finance category, so a financial target is
+    // classified from on-device package-name hints. The package name is
+    // on-device evidence and NEVER leaves the device — only the bucketed
+    // "financial"/"other" class is ever emitted. Heuristic and imperfect by
+    // design; over-tagging merely makes the advice slightly more urgent.
+    private val financialHints = listOf(
+        "bank", "upi", "wallet", "paytm", "phonepe", "gpay", "paypal",
+        "finance", "credit", "debit", "netbank", "mobilebank"
+    )
+
     private var foregroundPkg: String? = null
     private var watching = false
     private var targetClass = "other"
@@ -218,15 +228,8 @@ class LiveAttackObserver : AccessibilityService() {
     }
 
     private fun classifyTarget(pkg: String?): String {
-        pkg ?: return "other"
-        return try {
-            val ai = packageManager.getApplicationInfo(pkg, 0)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                ai.category == ApplicationInfo.CATEGORY_FINANCE
-            ) "financial" else "other"
-        } catch (_: Exception) {
-            "other"
-        }
+        val p = pkg?.lowercase() ?: return "other"
+        return if (financialHints.any { p.contains(it) }) "financial" else "other"
     }
 
     @Suppress("DEPRECATION")
