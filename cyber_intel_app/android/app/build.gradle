@@ -55,4 +55,15 @@ dependencies {
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
     implementation "com.squareup.okhttp3:okhttp:4.12.0"
     implementation "androidx.core:core-ktx:1.13.1"
+
+    // JVM unit tests for the pure detection logic (TakeoverScoring). Runs via
+    // `gradlew testDebugUnitTest` — no emulator, no device.
+    testImplementation "junit:junit:4.13.2"
+}
+
+// Make the APK build depend on the JVM unit tests, so CI — which builds the
+// APK — enforces them on every build with no separate workflow step (and no
+// `workflow` token scope needed to edit CI). A failing test fails the build.
+tasks.matching { it.name == "assembleRelease" || it.name == "assembleDebug" }.configureEach {
+    dependsOn "testDebugUnitTest"
 }

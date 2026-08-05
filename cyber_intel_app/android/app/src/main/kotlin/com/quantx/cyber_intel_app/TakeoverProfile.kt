@@ -30,52 +30,8 @@ import android.view.accessibility.AccessibilityManager
  */
 object TakeoverProfile {
 
-    private data class Profile(
-        val label: String,
-        val pkg: String,
-        val canRetrieveWindowContent: Boolean,
-        val canPerformGestures: Boolean,
-        val hasNotificationListener: Boolean,
-        val requestsOverlay: Boolean,
-        val fromStoreOrSystem: Boolean
-    ) {
-        /** Distinct takeover techniques this profile enables, as taxonomy labels. */
-        fun techniques(): List<String> {
-            val out = mutableListOf<String>()
-            // Auto-tap subsumes screen-read (it needs content retrieval too), so
-            // report the single, more severe technique rather than both.
-            if (canPerformGestures && canRetrieveWindowContent) out.add("a11y_auto_tap")
-            else if (canRetrieveWindowContent) out.add("a11y_screen_read")
-            if (requestsOverlay) out.add("overlay_phish")
-            if (hasNotificationListener) out.add("notif_intercept")
-            return out
-        }
-    }
-
-    // Worst technique first, for choosing the dominant reported category.
-    private val TECHNIQUE_RANK = mapOf(
-        "a11y_auto_tap" to 3,
-        "overlay_phish" to 2,
-        "notif_intercept" to 1,
-        "a11y_screen_read" to 0
-    )
-
-    /** Score a profile → (category, confidence), or null if nothing takeover-shaped. */
-    private fun classify(p: Profile): Pair<String, String>? {
-        val techniques = p.techniques()
-        if (techniques.isEmpty()) return null
-        val category = techniques.maxByOrNull { TECHNIQUE_RANK[it] ?: -1 } ?: return null
-        var confidence = if (techniques.size >= 2) "high" else "medium"
-        // A store/system-installed match is far more likely a legitimate tool;
-        // downgrade one step. Mirrors the offline scorer's `src` downgrade rule.
-        if (p.fromStoreOrSystem) {
-            confidence = when (confidence) {
-                "high" -> "medium"
-                else -> "low"
-            }
-        }
-        return category to confidence
-    }
+    // Pure scoring lives in TakeoverScoring (Android-free, unit-tested). This
+    // object only reads the capability fields off the device and hands them over.
 
     /**
      * Scan enabled accessibility services and return the single most severe
@@ -117,9 +73,7 @@ object TakeoverProfile {
             val canGestures = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
                 (caps and AccessibilityServiceInfo.CAPABILITY_CAN_PERFORM_GESTURES) != 0
 
-            val profile = Profile(
-                label = appInfo?.let { pm.getApplicationLabel(it).toString() } ?: pkg,
-                pkg = pkg,
+            val profile = CapabilityProfile(
                 canRetrieveWindowContent = canContent,
                 canPerformGestures = canGestures,
                 hasNotificationListener = notifListeners.contains(pkg),
@@ -127,14 +81,14 @@ object TakeoverProfile {
                 fromStoreOrSystem = isStoreInstalled(ctx, pkg)
             )
 
-            val result = classify(profile) ?: continue
+            val result = TakeoverScoring.classify(profile) ?: continue
             val (category, _) = result
-            val rank = TECHNIQUE_RANK[category] ?: -1
+            val rank = TakeoverScoring.rank(category)
             if (rank > bestRank) {
                 bestRank = rank
                 best = result
-                bestEvidence = "${profile.label}  (${profile.pkg}) → " +
-                    profile.techniques().joinToString(", ")
+                val label = appInfo?.let { pm.getApplicationLabel(it).toString() } ?: pkg
+                bestEvidence = "$label  ($pkg) → " + profile.techniques().joinToString(", ")
             }
         }
 
