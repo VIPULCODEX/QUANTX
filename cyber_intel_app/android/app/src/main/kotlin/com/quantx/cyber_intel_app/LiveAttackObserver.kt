@@ -6,7 +6,6 @@ import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
-import kotlin.math.sqrt
 
 /**
  * Buffer of findings the LiveAttackObserver has raised since the last scan.
@@ -67,27 +66,11 @@ object ObserverBuffer {
  */
 class LiveAttackObserver : AccessibilityService() {
 
-    // ── calibration constants (defaults; MCP traces replace these) ───────────
-    private val humanMinMedianMs = 120L   // sustained intervals below this are non-human
-    private val highConfMedianMs = 60L    // and below this, with low variance, unambiguous
-    private val lowCov = 0.35             // bots are regular: low coefficient of variation
-    private val minActionEvents = 5       // need a sustained run, not one fast tap
-
     private val actionTypes = setOf(
         AccessibilityEvent.TYPE_VIEW_CLICKED,
         AccessibilityEvent.TYPE_VIEW_SCROLLED,
         AccessibilityEvent.TYPE_VIEW_FOCUSED,
         AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
-    )
-
-    // Android has no ApplicationInfo finance category, so a financial target is
-    // classified from on-device package-name hints. The package name is
-    // on-device evidence and NEVER leaves the device — only the bucketed
-    // "financial"/"other" class is ever emitted. Heuristic and imperfect by
-    // design; over-tagging merely makes the advice slightly more urgent.
-    private val financialHints = listOf(
-        "bank", "upi", "wallet", "paytm", "phonepe", "gpay", "paypal",
-        "finance", "credit", "debit", "netbank", "mobilebank"
     )
 
     private var foregroundPkg: String? = null
@@ -128,7 +111,7 @@ class LiveAttackObserver : AccessibilityService() {
         emittedAutomation = false
         emittedOverlay = false
         watching = p != null && p != packageName && isUserFacing(p)
-        targetClass = classifyTarget(p)
+        targetClass = AutomationScoring.classifyTarget(p)
     }
 
     private fun recordAction() {
@@ -137,30 +120,21 @@ class LiveAttackObserver : AccessibilityService() {
         if (!emittedAutomation) scoreAutomation()
     }
 
-    /** Ported from event_sequence.score_stream's automation branch. */
+    /** Scoring lives in AutomationScoring (pure, unit-tested). */
     private fun scoreAutomation() {
-        if (actionTimes.size < minActionEvents) return
-        val intervals = ArrayList<Long>(actionTimes.size - 1)
-        for (i in 1 until actionTimes.size) intervals.add(actionTimes[i] - actionTimes[i - 1])
-        if (intervals.isEmpty()) return
-
-        val median = medianOf(intervals)
-        if (median > humanMinMedianMs) return   // human-paced; nothing to report
-
-        val cov = coefficientOfVariation(intervals)
-        val confidence = if (median <= highConfMedianMs && cov <= lowCov) "high" else "medium"
+        val r = AutomationScoring.score(actionTimes) ?: return
         emittedAutomation = true
         ObserverBuffer.add(
             mapOf(
                 "code" to "A11Y_AUTOMATION_ANOMALY",
                 "facets" to mapOf(
                     "category" to "a11y_auto_tap",
-                    "confidence" to confidence,
+                    "confidence" to r.confidence,
                     "target" to targetClass
                 ),
                 "evidence" to listOf(
-                    "median inter-action ${median}ms, cov ${"%.2f".format(cov)}, " +
-                        "${actionTimes.size} events"
+                    "median inter-action ${r.medianMs}ms, cov ${"%.2f".format(r.cov)}, " +
+                        "${r.events} events"
                 )
             )
         )
@@ -227,11 +201,6 @@ class LiveAttackObserver : AccessibilityService() {
         false
     }
 
-    private fun classifyTarget(pkg: String?): String {
-        val p = pkg?.lowercase() ?: return "other"
-        return if (financialHints.any { p.contains(it) }) "financial" else "other"
-    }
-
     @Suppress("DEPRECATION")
     private fun isStoreInstalled(pkg: String): Boolean {
         val installer = try {
@@ -244,20 +213,5 @@ class LiveAttackObserver : AccessibilityService() {
             null
         }
         return installer != null && installer.contains("com.android.vending")
-    }
-
-    private fun medianOf(values: List<Long>): Long {
-        val sorted = values.sorted()
-        val n = sorted.size
-        return if (n % 2 == 1) sorted[n / 2]
-        else (sorted[n / 2 - 1] + sorted[n / 2]) / 2
-    }
-
-    private fun coefficientOfVariation(values: List<Long>): Double {
-        if (values.size < 2) return 1.0
-        val mean = values.average()
-        if (mean <= 0) return 1.0
-        val variance = values.sumOf { (it - mean) * (it - mean) } / values.size
-        return sqrt(variance) / mean
     }
 }

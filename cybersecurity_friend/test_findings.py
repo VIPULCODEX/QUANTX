@@ -307,3 +307,32 @@ if __name__ == "__main__":
     if summary["missing_playbooks"]:
         print(f"codes still needing playbooks: {len(summary['missing_playbooks'])}")
     raise SystemExit(1 if failed else 0)
+
+
+# ── playbook coverage (T12) ──────────────────────────────────────────────────
+def test_every_registry_code_has_an_offline_playbook():
+    assert registry_summary()["missing_playbooks"] == []
+
+
+def test_playbooks_are_well_formed_and_never_advocate_rooting():
+    import re
+    from findings import PLAYBOOKS
+    # Advocacy = an instruction to root/unlock; "if you did not root this device" is not.
+    banned = re.compile(
+        r"(?:^|[.!?]\s+|\b(?:you\s+should|please|try\s+to|consider|you\s+can)\s+)"
+        r"(?:(?:root|jailbreak)\s+(?:your|the|this|it|a)\b|unlock\s+(?:your|the)\s+bootloader)", re.I)
+    for code, book in PLAYBOOKS.items():
+        assert code in REGISTRY, code
+        assert book["why"].strip() and 2 <= len(book["steps"]) <= 6, code
+        text = book["why"] + " " + " ".join(book["steps"])
+        assert not banned.search(text), code
+
+
+def test_playbooks_pass_the_output_guard_unchanged(monkeypatch):
+    """A fallback that the guard itself would reject would be a trap."""
+    import untrusted
+    monkeypatch.setenv("UNTRUSTED_GUARD", "1")
+    for code in REGISTRY:
+        f = sanitize_finding({"code": code, "facets": {}})
+        text = untrusted.format_playbook(f)
+        assert untrusted.check_answer(text, strict=True) == [], code

@@ -5,6 +5,7 @@ Free tier: 100 requests/day. Register at https://newsapi.org/
 
 import requests
 from config import NEWS_API_KEY, NEWS_QUERY, NEWS_PAGE_SIZE
+import untrusted
 
 
 def fetch_cybersecurity_news():
@@ -55,6 +56,7 @@ def format_articles_for_llm(articles: list) -> str:
     Convert raw API articles into a readable string for LLM summarization.
     """
     formatted_parts = []
+    guard = untrusted.guard_enabled()
 
     for i, article in enumerate(articles[:NEWS_PAGE_SIZE], start=1):
         title       = article.get("title", "Unknown Title")
@@ -63,6 +65,12 @@ def format_articles_for_llm(articles: list) -> str:
         description = article.get("description") or "No description available."
         # Truncate long descriptions to avoid token overload
         description = description[:500]
+        if guard:
+            # Headlines and descriptions come from arbitrary third parties.
+            title = untrusted.sanitize(title, 200)
+            source = untrusted.sanitize(source, 80)
+            published = untrusted.sanitize(published, 10)
+            description = untrusted.sanitize(description, 500)
 
         formatted_parts.append(
             f"Article {i}:\n"
@@ -72,4 +80,7 @@ def format_articles_for_llm(articles: list) -> str:
             f"  Description: {description}\n"
         )
 
-    return "\n".join(formatted_parts)
+    joined = "\n".join(formatted_parts)
+    if guard:
+        return f"{untrusted.DATA_ONLY_NOTE}\n{untrusted.spotlight(joined, 'news', 6000)}"
+    return joined

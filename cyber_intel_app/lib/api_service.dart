@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config.dart';
+import 'services/install_token.dart';
 
 class ApiMessage {
   final String role;
@@ -61,7 +62,7 @@ class ApiService with ChangeNotifier {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/api/chat'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await InstallToken.headers(),
         body: jsonEncode({
           'query': query,
           'user_id': 'mobile_user_1',

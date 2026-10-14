@@ -13,6 +13,7 @@ dependencies:
   provider: ^6.0.5
   google_fonts: ^6.1.0
   shared_preferences: ^2.2.2
+  crypto: ^3.0.3                  # HMAC for optional request signing
   # Security Dashboard plugins
   permission_handler: ^11.3.1     # runtime permissions for the Wi-Fi/device scans
   # NOTE: `intl` was removed — nothing imported it, and its version is a common
@@ -25,6 +26,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/phish_model.json   # on-device PhishSense parameters
   # Compiled by impellerc at BUILD time, so a syntax error fails CI rather
   # than surfacing as a blank panel on a user's device.
   shaders:

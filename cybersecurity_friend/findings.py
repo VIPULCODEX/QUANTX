@@ -521,6 +521,129 @@ PLAYBOOKS: Dict[str, Dict[str, Any]] = {
             "If you did not change it, treat the device as compromised.",
         ],
     },
+    # ── Added for coverage: wording is factual and awaits maintainer review ────
+    "DEVICE_ADMIN_UNTRUSTED": {
+        "why": "Device Admin rights let an app lock the screen, wipe the device, "
+               "and resist being uninstalled. Malware uses this to make itself "
+               "hard to remove.",
+        "steps": [
+            "Open Settings > Security (or Security & privacy) > Device admin apps.",
+            "Deactivate any app you do not recognise or did not set up yourself.",
+            "Then uninstall it from Settings > Apps. If it will not uninstall, "
+            "restart in Safe mode and try again.",
+            "Do not use banking apps until it is gone.",
+        ],
+    },
+    "PKG_UNKNOWN_INSTALLER": {
+        "why": "Apps installed from outside a trusted store skip the store's "
+               "malware checks. Most banking trojans reach phones this way.",
+        "steps": [
+            "Open Settings > Apps and look for apps you do not recognise or "
+            "did not install on purpose.",
+            "Uninstall anything unfamiliar.",
+            "Open Settings > Apps > Special app access > Install unknown apps "
+            "and revoke it for apps that do not need it.",
+            "Keep Google Play Protect turned on.",
+        ],
+    },
+    "NET_SUSPICIOUS_EGRESS": {
+        "why": "Something on the device is sending more data out than usual. This "
+               "can be a backup or an update, but it is also how stolen data leaves.",
+        "steps": [
+            "Open Settings > Network & internet > Data usage and look for an app "
+            "using far more data than you expect.",
+            "Restrict background data for apps you do not recognise, or uninstall them.",
+            "Avoid banking and payment apps until the unusual traffic stops.",
+        ],
+    },
+    "WIRELESS_DEBUG_ENABLED": {
+        "why": "Wireless debugging lets a paired computer control the device over "
+               "the network. Anyone who can pair with it gets the same access as a "
+               "USB cable.",
+        "steps": [
+            "Open Settings > System > Developer options and turn Wireless debugging off.",
+            "Choose 'Revoke USB debugging authorizations' to remove paired computers.",
+            "If you do not develop apps, turn Developer options off as well.",
+        ],
+    },
+    "SELF_DEBUGGER_ATTACHED": {
+        "why": "A debugger is attached to this app, so whoever controls it can "
+               "read the app's memory and change its behaviour while it runs.",
+        "steps": [
+            "Close this app and do not enter passwords or OTPs into it.",
+            "Disconnect the device from any computer and turn USB debugging and "
+            "Wireless debugging off in Developer options.",
+            "If you were not debugging this app yourself, treat the device as "
+            "compromised and reinstall the app from the official store.",
+        ],
+    },
+    "EMULATOR_DETECTED": {
+        "why": "This app is running on an emulator or virtual device, not a physical "
+               "phone. That is normal for testing, but a real-looking environment "
+               "can also be used to inspect or tamper with an app.",
+        "steps": [
+            "If you are testing on purpose, no action is needed.",
+            "Otherwise do not enter real credentials here.",
+            "Install the app on your own physical phone from the official store.",
+        ],
+    },
+    "INTEGRITY_VERDICT_FAIL": {
+        "why": "Google's integrity check could not confirm this is an unmodified, "
+               "certified Android device running genuine software. Causes include "
+               "an unlocked bootloader, a custom ROM, root, or a tampered OS. "
+               "Banking and payment apps may refuse to run.",
+        "steps": [
+            "If you did not modify the device yourself, check for system updates "
+            "and treat the result as a warning sign.",
+            "Avoid banking, payment and work apps on this device until it passes.",
+            "Restoring the manufacturer's official software is the way to clear "
+            "a failed check caused by modification.",
+        ],
+    },
+    "BOOT_PERSISTENCE_UNKNOWN": {
+        "why": "Something unrecognised is set to run every time the device starts, "
+               "which is how malware survives a reboot.",
+        "steps": [
+            "Review the boot-time modules or scripts you installed deliberately.",
+            "Remove or disable any entry you do not recognise.",
+            "If you did not install any such entry, treat the device as "
+            "compromised: back up your data and reflash official firmware.",
+        ],
+    },
+    "XPROC_ANON_EXEC": {
+        "why": "Another app has executable memory that is not backed by a file. "
+               "Browsers and some runtimes do this legitimately, but injected "
+               "code and shellcode look the same.",
+        "steps": [
+            "Restart the device; code injected only into memory does not survive a reboot.",
+            "If the warning returns for apps that should not need it, avoid banking "
+            "and payment apps.",
+            "Review recently installed apps and remove anything unfamiliar.",
+        ],
+    },
+    "NET_UNATTRIBUTED_CONN": {
+        "why": "A network connection exists that cannot be matched to any running "
+               "app. Short-lived connections can cause this innocently, but a "
+               "component hiding its owner would look the same.",
+        "steps": [
+            "Run another scan; a one-off connection will not repeat.",
+            "If it keeps appearing, avoid banking and payment apps on this device.",
+            "Back up your data. A persistent unattributed connection may mean a "
+            "system-level component, which a factory reset might not remove.",
+        ],
+    },
+    "DM_VERITY_DISABLED": {
+        "why": "Verified boot protection is off, so changes to the operating system "
+               "are no longer detected at startup.",
+        "steps": [
+            "If you turned it off deliberately, understand that the OS can now be "
+            "altered without warning.",
+            "If you did not, treat the device as compromised and avoid banking "
+            "and payment apps.",
+            "Restoring the manufacturer's official software re-enables verified boot.",
+        ],
+    },
+
     "A11Y_TAKEOVER_PROFILE": {
         "why": "An app that holds accessibility or notification access declares "
                "the exact capabilities banking trojans use to take over an "

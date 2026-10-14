@@ -19,6 +19,7 @@ v3 Scalability Upgrades:
 """
 
 import asyncio
+import re
 import time
 import logging
 from contextlib import asynccontextmanager
@@ -26,13 +27,18 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from rag_pipeline import RAGPipeline
 from assistant import CybersecurityAssistant
 from config import TOP_K, GROQ_API_KEY, GROQ_API_KEY_LIST, LLM_MAX_TOKENS
-from security import validate_query, rate_limiter, get_client_id
+from security import validate_query
 from cache_manager import cache_manager
+from hardening import HardeningMiddleware, RedactPeerAddress
+import untrusted
+import leakage
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -43,6 +49,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger("quantx.api")
 logger.setLevel(logging.INFO)
+
+# Access logs carry the peer IP by default; blank it. (User-Agent is not in the
+# default format and the app never logs it.)
+for _n in ("uvicorn.access", "gunicorn.access"):
+    logging.getLogger(_n).addFilter(RedactPeerAddress())
+
+# Browser origins allowed to call this API. Native app requests send no Origin
+# header and are unaffected. Edit this list, or set QUANTX_CORS_ORIGINS to a
+# comma-separated override.
+import os as _os_cors
+ALLOWED_ORIGINS = [
+    o.strip() for o in _os_cors.getenv(
+        "QUANTX_CORS_ORIGINS",
+        "https://vipulcdex-quantx.hf.space,http://localhost:3000,http://localhost:8501",
+    ).split(",") if o.strip()
+]
+
+# Version of the findings request schema this server speaks.
+FINDINGS_SCHEMA_VERSION = 1
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Concurrency Controls (Scaled dynamically based on multi-key pool size)
@@ -153,19 +178,34 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Install-Token", "X-Request-Nonce"],
 )
+app.add_middleware(HardeningMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def _invalid_request(request: Request, exc: RequestValidationError):
+    # The default handler echoes the offending input back; never do that.
+    return JSONResponse(status_code=422, content={"detail": "Invalid request."})
+
+
+@app.exception_handler(Exception)
+async def _unexpected_error(request: Request, exc: Exception):
+    _metrics["errors"] += 1
+    logger.error("Unhandled %s on %s", type(exc).__name__, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal error."})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Models
 # ─────────────────────────────────────────────────────────────────────────────
 class ChatRequest(BaseModel):
-    query: str
-    user_id: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(max_length=4000)
+    user_id: Optional[str] = Field(default=None, max_length=128)  # not used for limiting
     use_rag: Optional[bool] = True
 
 
@@ -197,16 +237,7 @@ async def handle_chat(request: ChatRequest, client_request: Request):
     start_time = time.perf_counter()
     _metrics["total_requests"] += 1
 
-    # 1. Rate Limiting
-    client_id = request.user_id or get_client_id(client_request)
-    if not rate_limiter.is_allowed(client_id):
-        _metrics["rate_limited"] += 1
-        remaining = rate_limiter.get_remaining(client_id)
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded. {remaining} requests remaining. Wait and retry.",
-            headers={"Retry-After": "60"},
-        )
+    # Rate limiting and body-size control happen in HardeningMiddleware.
 
     # 2. Input Validation
     try:
@@ -264,8 +295,8 @@ async def handle_chat(request: ChatRequest, client_request: Request):
         )
     except Exception as e:
         _metrics["errors"] += 1
-        logger.error("LLM error: %s", e)
-        raise HTTPException(status_code=500, detail=f"LLM Error: {str(e)}")
+        logger.error("LLM error: %s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="Could not generate a response.")
     finally:
         _llm_semaphore.release()
 
@@ -283,7 +314,7 @@ async def health_check():
         "keys_loaded": bool(GROQ_API_KEY),
         "pipeline_ready": assistant_instance is not None,
         "init_progress": _init_status["progress"],
-        "init_error": _init_status.get("error"),
+        "init_error": "initialization failed" if _init_status.get("error") else None,
         "llm_slots_available": _llm_semaphore._value if _llm_semaphore else 0,
         "llm_slots_total": MAX_CONCURRENT_LLM_CALLS,
     }
@@ -344,17 +375,20 @@ def _get_phish_model():
 
 
 class PhishRequest(BaseModel):
-    text: str
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(max_length=10000)
 
 
 class WifiRequest(BaseModel):
-    ssid: str
-    security_type: str          # e.g. "WPA2", "WPA3", "Open", "WEP"
+    model_config = ConfigDict(extra="forbid")
+    ssid: str = Field(max_length=64)
+    security_type: str = Field(max_length=32)   # e.g. "WPA2", "WPA3", "Open", "WEP"
     is_public: Optional[bool] = False
 
 
 class DeviceRequest(BaseModel):
-    os_version: str
+    model_config = ConfigDict(extra="forbid")
+    os_version: str = Field(max_length=128)
     usb_debugging: bool
     unknown_sources: bool
     developer_mode: bool
@@ -362,8 +396,10 @@ class DeviceRequest(BaseModel):
     google_play_protect: bool
 
 
-class AppAuditRequest(BaseModel):
-    apps: list                  # List of {name, package, permissions: [...]}
+_WIFI_SECURITY_TYPES = {
+    "OPEN": "Open", "NONE": "Open", "WEP": "WEP", "WPA": "WPA", "WPA2": "WPA2",
+    "WPA3": "WPA3", "WPA2/WPA3": "WPA2/WPA3", "WPA/WPA2": "WPA/WPA2",
+}
 
 
 @app.post("/api/security/phishing")
@@ -376,14 +412,15 @@ async def analyze_phishing(req: PhishRequest):
         from inference import analyze_text
         result = analyze_text(req.text, model=_get_phish_model())
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PhishSense error: {e}")
+        logger.error("PhishSense error: %s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="Analysis failed.")
 
     # Build LLM explanation if assistant is ready
     explanation = ""
     if assistant_instance:
         prompt = (
             f"A user submitted the following text for phishing analysis:\n\n"
-            f"\"{req.text}\"\n\n"
+            f"\"{untrusted.wrap_if_enabled(req.text, 'sample', 4000)}\"\n\n"
             f"The PhishSense ML model returned:\n"
             f"- Prediction: {result['prediction']}\n"
             f"- Risk Score: {result['risk_score']}%\n"
@@ -399,7 +436,68 @@ async def analyze_phishing(req: PhishRequest):
         except Exception:
             explanation = "Could not generate AI explanation at this time."
 
-    return {**result, "ai_explanation": explanation}
+    return {**result, "ai_explanation": untrusted.guard_answer(explanation)}
+
+
+# Every reason string the on-device or server PhishSense can produce. The explain
+# route accepts only these, so no client text can reach the prompt through it.
+PHISH_REASONS = frozenset({
+    "Urgency detected",
+    "Account verification pressure detected",
+    "OTP solicitation detected",
+    "Job/earning lure detected",
+    "Financial lure detected",
+    "Obfuscated wording detected",
+    "No major scam indicators found",
+    "Suspicious URL found",
+    "URL present but no high-risk domain pattern found",
+    "Shortened link detected",
+    "Suspicious domain extension found",
+    "Random-looking domain detected",
+})
+PHISH_CLASSES = ("phishing", "otp_scam", "job_scam", "lottery", "safe")
+
+
+class PhishExplainRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    prediction: str = Field(max_length=16)
+    risk_score: int = Field(ge=0, le=100)
+    reasons: list = Field(default_factory=list, max_length=16)
+    url_flag: str = Field(default="Safe", max_length=16)
+
+
+@app.post("/api/security/phishing/explain")
+async def explain_phishing_verdict(req: PhishExplainRequest):
+    """Explain a verdict that was computed ON THE DEVICE.
+
+    Receives only the class, score, signal names and URL flag - never the message
+    or any link - and builds the prompt from closed sets, so the assistant (and
+    the model provider) learn nothing about what the user was checking.
+    """
+    if req.prediction not in PHISH_CLASSES:
+        raise HTTPException(status_code=422, detail="Invalid request.")
+    reasons = [r for r in req.reasons if isinstance(r, str) and r in PHISH_REASONS]
+    url_flag = "Suspicious" if req.url_flag == "Suspicious" else "Safe"
+    if assistant_instance is None:
+        raise HTTPException(status_code=503, detail="AI not ready")
+
+    prompt = (
+        "A phishing check ran on the user's own phone. You cannot see the message "
+        "or any link, and must not ask for them. The check reported:\n"
+        f"- Prediction: {req.prediction}\n"
+        f"- Risk score: {req.risk_score}%\n"
+        f"- Signals: {', '.join(reasons) if reasons else 'none'}\n"
+        f"- URL check: {url_flag}\n\n"
+        "In 3-4 sentences, explain in plain English what this means, whether they "
+        "are at risk, and what to do next."
+    )
+    try:
+        text = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: assistant_instance.get_llm_response(prompt)
+        )
+    except Exception:
+        text = "Could not generate AI explanation at this time."
+    return {"ai_explanation": untrusted.guard_answer(text)}
 
 
 @app.post("/api/security/wifi")
@@ -408,10 +506,12 @@ async def analyze_wifi(req: WifiRequest):
     if assistant_instance is None:
         raise HTTPException(status_code=503, detail="AI not ready")
 
+    # The SSID identifies a place (home, workplace) and never reaches the LLM.
+    # security_type is reduced to a closed set so no client string is interpolated.
+    security_type = _WIFI_SECURITY_TYPES.get(req.security_type.strip().upper(), "Unknown")
     prompt = (
         f"A user is connected to a Wi-Fi network with these details:\n"
-        f"- Network Name (SSID): {req.ssid}\n"
-        f"- Security Type: {req.security_type}\n"
+        f"- Security Type: {security_type}\n"
         f"- Is Public Hotspot: {req.is_public}\n\n"
         f"As a cybersecurity expert, assess the risk level of this network. "
         f"Reply in this exact format:\n"
@@ -438,9 +538,13 @@ async def analyze_device(req: DeviceRequest):
     if not req.screen_lock:  issues.append("No Screen Lock set")
     if not req.google_play_protect: issues.append("Google Play Protect is DISABLED")
 
+    # Only the major Android version is used; the raw string can carry build
+    # fingerprints and vendor detail, so it is never interpolated into the prompt.
+    major = re.match(r"\s*(\d{1,2})\b", req.os_version)
+    os_major = major.group(1) if major else "unknown"
     prompt = (
         f"Perform a security audit on this Android device:\n"
-        f"- OS Version: {req.os_version}\n"
+        f"- Android major version: {os_major}\n"
         f"- Security Issues Found: {', '.join(issues) if issues else 'None detected'}\n"
         f"- Screen Lock: {'Enabled' if req.screen_lock else 'DISABLED'}\n"
         f"- Google Play Protect: {'Enabled' if req.google_play_protect else 'DISABLED'}\n\n"
@@ -456,29 +560,21 @@ async def analyze_device(req: DeviceRequest):
 
 
 @app.post("/api/security/apps")
-async def audit_apps(req: AppAuditRequest):
-    """Flag suspicious installed apps based on name and permissions using the LLM."""
-    if assistant_instance is None:
-        raise HTTPException(status_code=503, detail="AI not ready")
+async def audit_apps():
+    """Retired. Kept only so old clients get a clear answer instead of a crash.
 
-    app_summary = "\n".join([
-        f"- {a.get('name', 'Unknown')} ({a.get('package', '')}): permissions={a.get('permissions', [])}"
-        for a in req.apps[:40]   # cap at 40 to avoid token overflow
-    ])
-    prompt = (
-        f"Review this list of installed Android apps and their permissions. "
-        f"Flag any that seem suspicious (e.g. a flashlight app requesting microphone/location):\n\n"
-        f"{app_summary}\n\n"
-        f"Respond in this format:\n"
-        f"Suspicious Apps Found: [number]\n"
-        f"Flagged:\n- [App Name]: [reason why it's suspicious]\n"
-        f"Safe Apps: [count of apps that look normal]\n"
-        f"Recommendation: [one overall action for the user]"
+    This route used to forward app names, package IDs and permission sets to the
+    LLM, which is exactly the payload the bounded channel exists to prevent. It
+    now reads no body, builds no prompt and makes no LLM call.
+    """
+    return JSONResponse(
+        status_code=410,
+        content={
+            "detail": "This endpoint has been removed. Detect on-device and "
+                      "submit finding codes to /api/security/findings instead.",
+            "use": "/api/security/findings",
+        },
     )
-    analysis = await asyncio.get_event_loop().run_in_executor(
-        None, lambda: assistant_instance.get_llm_response(prompt)
-    )
-    return {"total_apps_scanned": len(req.apps), "analysis": analysis}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -504,8 +600,10 @@ MAX_AI_ENRICHMENT = 8
 
 
 class FindingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     findings: list
     want_ai: Optional[bool] = True
+    schema_version: Optional[int] = None   # absent -> current version
 
 
 def _build_advice_prompt(code: str, severity: str, facets: dict) -> str:
@@ -552,14 +650,8 @@ async def analyze_findings(req: FindingsRequest, client_request: Request):
     Offline playbooks are returned unconditionally, so the endpoint stays useful
     when the LLM is cold, rate-limited, or unavailable.
     """
-    client_id = get_client_id(client_request)
-    if not rate_limiter.is_allowed(client_id):
-        _metrics["rate_limited"] += 1
-        raise HTTPException(
-            status_code=429,
-            detail="Rate limit exceeded. Wait and retry.",
-            headers={"Retry-After": "60"},
-        )
+    if req.schema_version not in (None, FINDINGS_SCHEMA_VERSION):
+        raise HTTPException(status_code=400, detail="Unsupported schema_version.")
 
     try:
         accepted, rejected = sanitize_batch(req.findings)
@@ -605,7 +697,9 @@ async def analyze_findings(req: FindingsRequest, client_request: Request):
                 )
                 try:
                     _metrics["llm_calls"] += 1
-                    advice = await _llm_with_semaphore(prompt)
+                    advice = untrusted.guard_answer(
+                        await _llm_with_semaphore(prompt), finding
+                    )
                     await cache_manager.aset(cache_key, advice)
                     entry["ai"] = advice
                 except asyncio.TimeoutError:
@@ -635,3 +729,11 @@ async def findings_registry():
     """Published contract. Clients use this to validate codes before submitting,
     and it makes the privacy surface auditable by anyone."""
     return registry_summary()
+
+
+@app.get("/api/security/findings/leakage")
+async def findings_leakage():
+    """Information capacity of the wire format, in bits, computed from the
+    registry. Static for a given deployment, so clients may cache it."""
+    return JSONResponse(content=leakage.leakage_table(),
+                        headers={"Cache-Control": "public, max-age=3600"})

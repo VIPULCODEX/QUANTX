@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
+import 'install_token.dart';
+import 'payload_log.dart';
+import 'payload_signer.dart';
 import 'security_channel.dart';
 
 /// One detection result.
@@ -96,14 +99,30 @@ class ScanService extends ChangeNotifier {
         'want_ai': true,
         'findings': _findings.map((f) => f.toWire()).toList(),
       });
+      // Logged from the same string that is sent below - never re-serialised,
+      // so the "What was sent" screen cannot disagree with the wire.
+      PayloadLog.instance.record(body);
 
-      final resp = await http
+      // The signature covers exactly these bytes, and exactly these bytes are sent.
+      final bytes = utf8.encode(body);
+      Future<http.Response> post({bool offerKey = false}) async => http
           .post(
             Uri.parse('${AppConfig.apiBaseUrl}/api/security/findings'),
-            headers: {'Content-Type': 'application/json'},
-            body: body,
+            headers: {
+              ...await InstallToken.headers(),
+              ...await PayloadSigner.headers(bytes, offerKey: offerKey),
+            },
+            body: bytes,
           )
           .timeout(AppConfig.requestTimeout);
+
+      var resp = await post();
+      if (resp.statusCode == 401) {
+        // The server may have restarted and forgotten this install's key.
+        await PayloadSigner.markRegistered(false);
+        resp = await post(offerKey: true);
+      }
+      if (resp.statusCode == 200) await PayloadSigner.markRegistered(true);
 
       if (resp.statusCode != 200) {
         _adviceOffline = true;

@@ -15,6 +15,7 @@ from config import (
     NEWS_TRIGGER_WORDS, LLM_MAX_TOKENS, LLM_MODEL, LLM_TEMPERATURE, GROQ_API_KEY_LIST
 )
 from security import validate_query
+import untrusted
 
 # ─────────────────────────────────────────────────────
 # PROMPT TEMPLATES
@@ -170,8 +171,11 @@ class CybersecurityAssistant:
 
         self.rag_chain = (
             {
-                "context": RunnableLambda(retrieve_context),
-                "question": RunnablePassthrough()
+                # Retrieved documents (some ingested from the Web) and the user's
+                # question are untrusted; both are spotlighted when the guard is on.
+                "context": RunnableLambda(retrieve_context)
+                           | RunnableLambda(lambda c: untrusted.wrap_if_enabled(c, "retrieved", 6000)),
+                "question": RunnableLambda(lambda q: untrusted.wrap_if_enabled(q, "user", 2000)),
             }
             | RAG_PROMPT
             | RunnableLambda(lambda x: next(self.llm_cycler).invoke(x))
@@ -228,8 +232,11 @@ class CybersecurityAssistant:
     # ──────────────────────────────────────
     # Base LLM Response (No RAG)
     # ──────────────────────────────────────
-    def get_llm_response(self, query: str) -> str:
-        """Answer a query directly using the LLM without knowledge base context."""
+    def get_llm_response(self, query: str, untrusted_input: bool = False) -> str:
+        """Answer a query directly using the LLM without knowledge base context.
+
+        `untrusted_input` marks `query` as third-party text (chat); server-built
+        prompts leave it False so they are not mislabelled as data."""
         print("  [*] Answering directly via LLM...")
         try:
             general_prompt = ChatPromptTemplate.from_template(
@@ -240,6 +247,8 @@ class CybersecurityAssistant:
                 "Response:"
             )
             chain = general_prompt | RunnableLambda(lambda x: next(self.llm_cycler).invoke(x)) | self.output_parser
+            if untrusted_input:
+                query = untrusted.wrap_if_enabled(query, "user", 2000)
             return chain.invoke({"question": query})
         except Exception as e:
             return f"[!] Error generating response: {str(e)}"
@@ -256,7 +265,7 @@ class CybersecurityAssistant:
                 "os": os_val,
                 "browser": browser_val,
                 "av": av_val,
-                "activity": activity_val
+                "activity": untrusted.wrap_if_enabled(activity_val, "activity", 1000)
             })
         except Exception as e:
             return f"[!] Error during system analysis: {str(e)}"
@@ -265,6 +274,10 @@ class CybersecurityAssistant:
     # Main Entry Point
     # ──────────────────────────────────────
     def respond(self, query: str, use_rag: bool = True) -> str:
+        """Route a query, then validate the answer (no-op unless UNTRUSTED_GUARD)."""
+        return untrusted.guard_answer(self._respond(query, use_rag))
+
+    def _respond(self, query: str, use_rag: bool = True) -> str:
         """
         Route query to appropriate handler:
         - News keywords → NewsAPI + LLM summary
@@ -291,8 +304,8 @@ class CybersecurityAssistant:
             # Automatic fallback if RAG didn't find specific info
             if "Initializing general reasoning fallback" in rag_res:
                 print("  [*] RAG context insufficient. Falling back to direct LLM.")
-                return self.get_llm_response(query)
+                return self.get_llm_response(query, untrusted_input=True)
             return rag_res
         else:
-            return self.get_llm_response(query)
+            return self.get_llm_response(query, untrusted_input=True)
 

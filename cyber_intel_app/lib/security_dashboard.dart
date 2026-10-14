@@ -8,6 +8,8 @@ import 'services/security_channel.dart';
 import 'widgets/message_body.dart';
 import 'theme/app_theme.dart';
 import 'widgets/glass.dart';
+import 'services/install_token.dart';
+import 'services/phish_local_loader.dart';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,6 +119,7 @@ class _PhishingTab extends StatefulWidget {
 class _PhishingTabState extends State<_PhishingTab> {
   final _ctrl = TextEditingController();
   bool _loading = false;
+  bool _explaining = false;
   Map<String, dynamic>? _result;
 
   // Real-time scanning state, backed by the accessibility service.
@@ -157,14 +160,26 @@ class _PhishingTabState extends State<_PhishingTab> {
   }
 
   Future<void> _analyze() async {
-    if (_ctrl.text.trim().isEmpty) return;
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) return;
     setState(() { _loading = true; _result = null; });
     try {
+      // Local first: the model and rules run on this phone, so the message or
+      // link being checked is never sent anywhere.
+      try {
+        final model = await PhishLocal.load();
+        final local = model.analyze(text);
+        if (mounted) setState(() => _result = {...local, 'local': true});
+        return;
+      } catch (_) {
+        // Bundled model unavailable: fall back to the server check below.
+      }
+
       final resp = await http
           .post(
             Uri.parse('${widget.baseUrl}/api/security/phishing'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'text': _ctrl.text.trim()}),
+            headers: await InstallToken.headers(),
+            body: jsonEncode({'text': text}),
           )
           .timeout(AppConfig.requestTimeout);
       if (resp.statusCode == 200) {
@@ -176,6 +191,36 @@ class _PhishingTabState extends State<_PhishingTab> {
       setState(() => _result = {'error': 'Network error: $e'});
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Opt-in: ask the assistant to explain a LOCAL verdict. Only the verdict
+  /// (class, score, signal names, URL flag) is sent - never the text or links.
+  Future<void> _explainLocal() async {
+    final r = _result;
+    if (r == null || _explaining) return;
+    setState(() => _explaining = true);
+    try {
+      final resp = await http
+          .post(
+            Uri.parse('${widget.baseUrl}/api/security/phishing/explain'),
+            headers: await InstallToken.headers(),
+            body: jsonEncode({
+              'prediction': r['prediction'],
+              'risk_score': r['risk_score'],
+              'reasons': r['reasons'],
+              'url_flag': r['url_flag'],
+            }),
+          )
+          .timeout(AppConfig.requestTimeout);
+      if (resp.statusCode == 200 && mounted) {
+        final body = jsonDecode(resp.body) as Map<String, dynamic>;
+        setState(() => _result = {...r, 'ai_explanation': body['ai_explanation']});
+      }
+    } catch (_) {
+      // The local verdict stands on its own; the explanation is optional.
+    } finally {
+      if (mounted) setState(() => _explaining = false);
     }
   }
 
@@ -236,6 +281,26 @@ class _PhishingTabState extends State<_PhishingTab> {
         if (_result != null) ...[
           const SizedBox(height: AppSpacing.lg),
           _PhishResult(result: _result!),
+          if (_result!['local'] == true) ...[
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              'Checked on this device. The text you pasted was not sent anywhere.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 11.5, height: 1.4),
+            ),
+            if ('${_result!['ai_explanation'] ?? ''}'.isEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: _explaining ? null : _explainLocal,
+                icon: _explaining
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.auto_awesome_outlined, size: 16),
+                label: const Text('Explain with AI (sends only the verdict)'),
+              ),
+            ],
+          ],
         ],
       ],
     );
@@ -615,7 +680,7 @@ class _WifiTabState extends State<_WifiTab> {
       final resp = await http
           .post(
             Uri.parse('${widget.baseUrl}/api/security/wifi'),
-            headers: {'Content-Type': 'application/json'},
+            headers: await InstallToken.headers(),
             body: jsonEncode({
               // Only the security TYPE leaves the device — never the SSID,
               // which identifies a home or workplace.

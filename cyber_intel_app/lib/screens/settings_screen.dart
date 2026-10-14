@@ -4,6 +4,7 @@ import '../api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_preview.dart';
 import '../widgets/liquid_glass.dart';
+import 'payload_log_screen.dart';
 
 /// Detection Mode + connection settings.
 ///
@@ -103,6 +104,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PayloadLogScreen()),
+          ),
+          icon: const Icon(Icons.fact_check_outlined, size: 18),
+          label: const Text('What was sent'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.textPrimary,
+            minimumSize: const Size(0, 48),
+            side: const BorderSide(color: AppColors.borderStrong),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
           ),
         ),
 

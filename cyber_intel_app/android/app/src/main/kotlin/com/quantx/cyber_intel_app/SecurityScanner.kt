@@ -39,21 +39,6 @@ import java.security.cert.X509Certificate
  */
 object SecurityScanner {
 
-    // Substrings that appear in /proc/self/maps when an instrumentation
-    // framework has injected itself into this process.
-    private val HOOK_SIGNATURES = mapOf(
-        "frida" to "frida",
-        "gum-js-loop" to "frida",
-        "gmain" to "frida",
-        "linjector" to "frida",
-        "xposedbridge" to "xposed",
-        "libxposed" to "xposed",
-        "edxposed" to "xposed",
-        "lspd" to "lsposed",
-        "riru" to "lsposed",
-        "zygisk" to "lsposed"
-    )
-
     private val FRIDA_PORTS = intArrayOf(27042, 27043)
 
     private val SU_PATHS = arrayOf(
@@ -112,13 +97,11 @@ object SecurityScanner {
         var framework = "unknown"
 
         try {
-            File("/proc/self/maps").forEachLine { line ->
-                val lower = line.lowercase()
-                for ((needle, fw) in HOOK_SIGNATURES) {
-                    if (lower.contains(needle)) {
-                        hits.add(needle)
-                        framework = fw
-                    }
+            File("/proc/self/maps").useLines { lines ->
+                val scan = ScannerLogic.scanMapsLines(lines)
+                if (scan.hits.isNotEmpty()) {
+                    hits.addAll(scan.hits)
+                    framework = scan.framework
                 }
             }
         } catch (_: Exception) {
@@ -158,10 +141,8 @@ object SecurityScanner {
         // something is already ptrace-attached to us.
         try {
             File("/proc/self/status").forEachLine { line ->
-                if (line.startsWith("TracerPid:")) {
-                    val pid = line.substringAfter(':').trim().toIntOrNull() ?: 0
-                    if (pid != 0) evidence.add("TracerPid=$pid")
-                }
+                val pid = ScannerLogic.tracerPid(line)
+                if (pid != null && pid != 0) evidence.add("TracerPid=$pid")
             }
         } catch (_: Exception) {
         }
@@ -201,7 +182,7 @@ object SecurityScanner {
             val sha = MessageDigest.getInstance("SHA-256").digest(sigBytes)
                 .joinToString(":") { "%02X".format(it) }
 
-            if (subject.contains("Android Debug", ignoreCase = true)) {
+            if (ScannerLogic.isDebugSignature(subject)) {
                 return finding(
                     "SELF_SIGNATURE_MISMATCH",
                     evidence = listOf(
@@ -219,41 +200,18 @@ object SecurityScanner {
 
     // ── Environment ──────────────────────────────────────────────────────────
     private fun detectEmulator(): Map<String, Any?>? {
-        val evidence = mutableListOf<String>()
-        val fp = Build.FINGERPRINT.lowercase()
-        val model = Build.MODEL.lowercase()
-        val hw = Build.HARDWARE.lowercase()
-
-        if (fp.startsWith("generic") || fp.contains("vbox") || fp.contains("test-keys")) {
-            evidence.add("fingerprint: ${Build.FINGERPRINT.take(40)}")
-        }
-        if (hw == "goldfish" || hw == "ranchu" || hw.contains("vbox")) {
-            evidence.add("hardware: ${Build.HARDWARE}")
-        }
-        if (model.contains("emulator") || model.contains("android sdk")) {
-            evidence.add("model: ${Build.MODEL}")
-        }
-
+        val evidence = ScannerLogic.emulatorEvidence(Build.FINGERPRINT, Build.MODEL, Build.HARDWARE)
         return if (evidence.isEmpty()) null
         else finding("EMULATOR_DETECTED", evidence = evidence)
     }
 
     private fun detectRoot(): Map<String, Any?>? {
-        val evidence = mutableListOf<String>()
-        var method = "unknown"
-
-        SU_PATHS.filter { File(it).exists() }.forEach {
-            evidence.add("su binary: $it"); method = "other"
-        }
-        MAGISK_PATHS.filter { File(it).exists() }.forEach {
-            evidence.add("magisk: $it"); method = "magisk"
-        }
-        if (Build.TAGS?.contains("test-keys") == true) {
-            evidence.add("build signed with test-keys")
-        }
-
-        return if (evidence.isEmpty()) null
-        else finding("DEVICE_ROOTED", mapOf("method" to method), evidence)
+        val root = ScannerLogic.classifyRoot(
+            suFound = SU_PATHS.filter { File(it).exists() },
+            magiskFound = MAGISK_PATHS.filter { File(it).exists() },
+            testKeys = Build.TAGS?.contains("test-keys") == true
+        ) ?: return null
+        return finding("DEVICE_ROOTED", mapOf("method" to root.method), root.evidence)
     }
 
     private fun detectDevOptions(ctx: Context): Map<String, Any?>? {
@@ -317,9 +275,7 @@ object SecurityScanner {
         val flagged = mutableListOf<String>()
         var sawSideload = false
 
-        for (entry in raw.split(':')) {
-            val pkg = entry.substringBefore('/').trim()
-            if (pkg.isEmpty() || pkg == ctx.packageName) continue
+        for (pkg in ScannerLogic.servicePackages(raw, ctx.packageName)) {
 
             val appInfo = try {
                 pm.getApplicationInfo(pkg, 0)
@@ -333,7 +289,7 @@ object SecurityScanner {
 
             val label = appInfo?.let { pm.getApplicationLabel(it).toString() } ?: pkg
             val installer = installerOf(ctx, pkg)
-            if (installer == null || !installer.contains("com.android.vending")) {
+            if (!ScannerLogic.isStoreInstaller(installer)) {
                 sawSideload = true
             }
             flagged.add("$label  ($pkg)")
@@ -344,7 +300,7 @@ object SecurityScanner {
             code,
             mapOf(
                 "count" to flagged.size,
-                "src" to if (sawSideload) "unknown" else "play"
+                "src" to ScannerLogic.srcFacet(sawSideload)
             ),
             flagged
         )
